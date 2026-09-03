@@ -1,0 +1,54 @@
+# === Backend (.NET) ===
+backend/**/[Bb]in/
+backend/**/[Oo]bj/
+backend/**/[Dd]ebug/
+backend/**/[Rr]elease/
+backend/**/publish/
+backend/**/TestResults/
+backend/**/*.user
+backend/**/*.suo
+backend/**/*.userosscache
+backend/**/*.sln.docstates
+backend/**/secrets.json
+
+# === Frontend (Angular) ===
+frontend/node_modules
+frontend/dist
+frontend/tmp
+frontend/out-tsc
+frontend/.angular/cache
+frontend/.sass-cache/
+frontend/connect.lock
+frontend/coverage
+frontend/libpeerconnection.log
+frontend/testem.log
+frontend/typings
+
+# Cypress
+frontend/cypress/videos/
+frontend/cypress/screenshots/
+
+# === IDE ===
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.swp
+*.swo
+
+# === System ===
+.DS_Store
+Thumbs.db
+
+# === Environment ===
+.env
+.env.local
+.env.*.local
+
+# === Logs ===
+*.log
+
+# === Playwright MCP artifacts (shared browser session output, not project content) ===
+.playwright-mcp/

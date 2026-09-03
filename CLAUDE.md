@@ -1,0 +1,151 @@
+# projet3-datashare
+
+> DataShare — Plateforme de transfert sécurisé de fichiers (prototype MVP). Projet 3 du parcours OpenClassrooms Expert DevOps (path 2461, projet 4089).
+
+Brief complet et entrants du projet : `C:\workspace\.mafal\projet3-datashare\entrants\` (hors de ce repo, jamais commité).
+Décisions d'architecture : `docs/adr/`.
+
+## Stack technique
+
+### Backend (`backend/`)
+- **Framework** : .NET 8, ASP.NET Core Web API (C# 12)
+- **ORM** : Entity Framework Core 8
+- **Base de données** : PostgreSQL
+- **Stockage fichiers** : système de fichiers local
+- **Auth** : JWT (access token court + refresh token), voir `docs/adr/0001-stack-technique.md`
+- **Tests** : MSTest + Coverlet (couverture)
+- **Qualité** : SonarQube, .NET Analyzers
+
+### Frontend (`frontend/`)
+- **Framework** : Angular 17+ (Standalone Components)
+- **Tests unitaires** : Jest (`jest-preset-angular`)
+- **Tests e2e** : Cypress
+- **Qualité** : SonarQube, ESLint
+
+### Commandes utiles
+
+```bash
+# Backend
+cd backend
+dotnet run
+dotnet test --collect:"XPlat Code Coverage"
+
+# Frontend
+cd frontend
+ng serve
+npm test              # Jest
+npx cypress run       # e2e
+ng build --configuration=production
+```
+
+## Architecture
+
+### Backend — ASP.NET Core Web API
+
+Architecture en couches classique, pas de MVVM (ce n'est pas une app desktop) :
+
+```
+backend/
+├── src/
+│   ├── Controllers/     # Endpoints REST (DTOs en entrée/sortie uniquement)
+│   ├── Services/        # Logique métier (interfaces + implémentations)
+│   ├── Repositories/    # Accès aux données (EF Core)
+│   ├── Models/          # Entités EF Core
+│   ├── DTOs/            # Objets de transfert (requêtes/réponses API)
+│   ├── Middleware/       # Gestion d'erreurs, auth JWT
+│   └── Program.cs
+└── tests/
+    ├── UnitTests/         # MSTest
+    └── IntegrationTests/  # MSTest
+```
+
+- Pas de logique métier dans les contrôleurs — ils délèguent aux services.
+- Injection de dépendances via le conteneur ASP.NET Core natif.
+- Requêtes paramétrées uniquement (EF Core LINQ), jamais de concaténation SQL.
+- Nullable reference types activés (`<Nullable>enable</Nullable>`).
+
+### Frontend — Angular
+
+```
+frontend/src/
+├── app/
+│   ├── core/           # Services singleton, guards, intercepteurs (JWT, refresh)
+│   ├── shared/         # Composants réutilisables, pipes, directives
+│   ├── features/       # Modules fonctionnels (lazy-loaded) : auth, upload, historique...
+│   │   └── feature-x/
+│   │       ├── components/
+│   │       ├── services/
+│   │       └── models/
+│   └── app.component.ts
+├── assets/
+└── environments/
+```
+
+- Smart/Dumb components : les Smart gèrent la donnée, les Dumb sont purement présentationnels (`@Input`/`@Output`).
+- `OnPush` change detection partout.
+- Routes lazy-loadées.
+- Standalone components (pas de NgModules).
+
+## Conventions Git
+
+### Branches protégées (GitHub Rulesets)
+
+Les branches `main` et `develop` sont **protégées**. **Aucun push direct**, même pour l'admin — tout passe par Pull Request.
+
+- `main` : PR requise, 1 review minimum (l'admin peut force-merger via `bypass_mode: pull_request`, mais ne peut jamais push directement)
+- `develop` : PR requise, 0 review minimum
+
+### Fil rouge : les étapes de la mission
+
+Le projet suit les 6 étapes du brief OpenClassrooms (voir `.mafal\projet3-datashare\entrants\mission\`). Une branche/un groupe de commits par étape.
+
+### Workflow
+
+```
+1. git checkout develop && git checkout -b feature/etape<N>-description
+2. Développer + commiter (Conventional Commits)
+3. git push origin feature/etape<N>-description
+4. gh pr create --base develop
+5. CI passe → merge dans develop
+6. Quand develop est stable → PR develop → main
+```
+
+### Nommage des branches
+
+| Préfixe | Usage | Exemple |
+|---------|-------|---------|
+| `feature/` | Nouvelle fonctionnalité | `feature/etape1-architecture-mcd` |
+| `fix/` | Correction de bug | `fix/etape4-upload-token` |
+| `chore/` | Maintenance technique | `chore/update-deps` |
+| `docs/` | Documentation uniquement | `docs/etape6-readme` |
+
+### Conventional Commits
+
+Format : `type(scope): description`
+
+`feat` · `fix` · `refactor` · `test` · `docs` · `chore` · `style`
+
+### Interdit
+
+- Push direct sur `main` ou `develop` → rejeté par GitHub
+- Force push sur branches protégées → rejeté
+- Merge sans PR → rejeté
+
+## Suivi qualité et maintenance
+
+Répartis en 4 fichiers à la racine (exigence de la spec OC) : `TESTING.md`, `SECURITY.md`, `PERF.md`, `MAINTENANCE.md`. À ouvrir et enrichir au fil des étapes, pas rédiger d'un bloc à la fin.
+
+- Couverture de code : objectif indicatif 70 % (spec OC), avec capture d'écran du rapport dans TESTING.md.
+- Scan de sécurité basique (`npm audit` côté front, équivalent .NET côté back), documenté dans SECURITY.md.
+- Test de performance sur un endpoint critique (upload/download) avec k6, documenté dans PERF.md.
+
+## Utilisation de l'IA dans le développement
+
+Contrainte du brief : l'IA générative ne doit être utilisée que pour développer **une seule User Story** du projet ; le reste est codé manuellement. Pour cette US : tâches assignées explicitement, code relu, commits séparés (ex. `feat(ai): ...` puis `fix: ... (revue humaine)`), et une section dédiée dans la doc technique expliquant l'usage fait de l'IA. Voir `.mafal\projet3-datashare\entrants\ia-et-developpement.md` et `mission\04-etape-4-fonctionnalites.md`.
+
+## Sécurité
+
+- **Jamais** de secrets/tokens dans le code commité.
+- `.env` non commité pour le développement local ; **GitHub Secrets** pour la CI.
+- Mots de passe hashés (BCrypt côté .NET), jamais stockés en clair.
+- Validation des entrées côté client ET serveur.
