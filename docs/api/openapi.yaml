@@ -1,0 +1,334 @@
+openapi: 3.0.3
+info:
+  title: DataShare API
+  description: >
+    API du prototype DataShare (Projet 3 OpenClassrooms). Périmètre MVP (US01-US06) :
+    upload avec compte, téléchargement via lien, création de compte, connexion, historique,
+    suppression. Les fonctionnalités avancées optionnelles (US07-US10 : upload anonyme,
+    gestion des tags dédiée, expiration configurable) ne sont pas incluses dans ce contrat
+    v1 — à ajouter si implémentées.
+  version: "1.0.0"
+
+servers:
+  - url: http://localhost:5000
+    description: Développement local
+
+tags:
+  - name: Auth
+    description: Inscription, connexion, renouvellement de session (US03, US04)
+  - name: Files
+    description: Upload, téléchargement, historique, suppression (US01, US02, US05, US06)
+
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Création de compte (US03)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Compte créé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          description: Email invalide, mot de passe trop court, ou email déjà utilisé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Connexion (US04)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Connexion réussie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Email ou mot de passe incorrect
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Renouvellement de l'access token via un refresh token valide
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Nouveau couple access/refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Refresh token invalide, expiré ou révoqué
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Révocation du refresh token courant
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "204":
+          description: Déconnecté
+
+  /api/files:
+    post:
+      tags: [Files]
+      summary: Upload d'un fichier (US01)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Taille maximale 1 Go
+                password:
+                  type: string
+                  minLength: 6
+                  nullable: true
+                  description: Optionnel — protège le téléchargement
+                expiresInDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 7
+                  default: 7
+                tags:
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 30
+                  nullable: true
+      responses:
+        "201":
+          description: Fichier téléversé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileResponse"
+        "400":
+          description: >
+            Fichier trop volumineux, extension interdite, champ invalide, ou type de
+            fichier détecté par signature (magic bytes) non autorisé / incohérent avec
+            l'extension déclarée — validation indépendante du Content-Type envoyé par
+            le client, qui n'est jamais fait confiance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Non authentifié
+
+    get:
+      tags: [Files]
+      summary: Historique des fichiers de l'utilisateur connecté (US05)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Liste des fichiers envoyés par l'utilisateur
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FileResponse"
+        "401":
+          description: Non authentifié
+
+  /api/files/{id}:
+    delete:
+      tags: [Files]
+      summary: Suppression d'un fichier (US06)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Fichier supprimé (suppression physique, irréversible)
+        "403":
+          description: "Le fichier n'appartient pas à l'utilisateur connecté"
+        "404":
+          description: Fichier introuvable
+
+  /api/files/download/{token}:
+    get:
+      tags: [Files]
+      summary: Métadonnées d'un fichier avant téléchargement (US02)
+      description: >
+        Accessible à tout détenteur du lien, sans authentification. Ne révèle pas si le
+        fichier est protégé par mot de passe autrement que via `requiresPassword`.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Métadonnées du fichier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileMetadataResponse"
+        "404":
+          description: Lien invalide ou fichier expiré
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      tags: [Files]
+      summary: Téléchargement effectif du fichier (US02)
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                  nullable: true
+                  description: Requis uniquement si le fichier est protégé
+      responses:
+        "200":
+          description: Flux binaire du fichier
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "401":
+          description: Mot de passe requis ou incorrect
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Lien invalide ou fichier expiré
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+
+    UserResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        createdAt: { type: string, format: date-time }
+
+    TokenResponse:
+      type: object
+      properties:
+        accessToken: { type: string, description: "JWT, courte durée de vie (ex. 15 min)" }
+        refreshToken: { type: string, description: "Longue durée de vie, révocable" }
+        expiresIn: { type: integer, description: "Durée de vie de l'access token, en secondes" }
+
+    FileResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        contentType: { type: string, example: "application/pdf" }
+        sizeBytes: { type: integer, format: int64 }
+        downloadUrl: { type: string }
+        hasPassword: { type: boolean }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [valid, expired]
+        tags:
+          type: array
+          items: { type: string }
+
+    FileMetadataResponse:
+      type: object
+      properties:
+        filename: { type: string }
+        contentType: { type: string, example: "application/pdf" }
+        sizeBytes: { type: integer, format: int64 }
+        expiresAt: { type: string, format: date-time }
+        requiresPassword: { type: boolean }
+
+    ErrorResponse:
+      type: object
+      properties:
+        message: { type: string }
+        code: { type: string }
