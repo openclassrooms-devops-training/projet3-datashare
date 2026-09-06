@@ -164,6 +164,17 @@ paths:
       tags: [Files]
       summary: Historique des fichiers de l'utilisateur connecté (US05)
       security: [{ bearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: >
+            Filtre optionnel (non requis par la spec, mais présent dans la maquette
+            Figma "Mon espace" sous forme d'onglets Tous/Actifs/Expiré).
+          schema:
+            type: string
+            enum: [all, active, expired]
+            default: all
       responses:
         "200":
           description: Liste des fichiers envoyés par l'utilisateur

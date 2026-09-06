@@ -26,7 +26,7 @@ erDiagram
 
     FILE {
         uuid id PK
-        uuid user_id FK "nullable — prévu pour US07 upload anonyme (post-MVP), toujours renseigné pour le MVP (US01)"
+        uuid user_id FK "nullable — un fichier peut exister sans propriétaire (upload anonyme, US07)"
         string original_filename
         string content_type "MIME type détecté serveur (signature/magic bytes), jamais le Content-Type déclaré par le client — affiché avant téléchargement (US02)"
         string storage_path
@@ -43,6 +43,15 @@ erDiagram
         string label "texte libre, max 30 caractères, pas de doublon par fichier"
     }
 ```
+
+## Pourquoi `FILE.user_id` est nullable
+
+Un fichier peut exister **sans** propriétaire : c'est l'upload anonyme (US07). Ce n'est pas une fonctionnalité qu'on construit forcément en v1 (elle est classée "avancée/optionnelle" dans la spec), mais le MCD représente le **domaine métier réel**, pas le périmètre de la première livraison. La distinction à garder en tête :
+
+- **MCD (ce fichier)** = ce que les données représentent conceptuellement, selon la spec complète (US01 à US10). Un fichier anonyme existe dans ce domaine, donc `user_id` doit pouvoir être vide.
+- **API v1 / code** = ce qu'on construit en premier. Si seul US01 (upload authentifié) est implémenté, le code applicatif n'écrira jamais de fichier avec `user_id` vide — mais ça n'a aucune raison de changer le MCD, qui reste correct et prêt si US07 est ajoutée plus tard sans migration de schéma.
+
+Bref : ne pas confondre "ce qu'on construit maintenant" (scope de livraison) et "ce que les données peuvent légitimement représenter" (modèle conceptuel).
 
 ## Pourquoi des UUID plutôt que des ID auto-incrémentés ?
 
