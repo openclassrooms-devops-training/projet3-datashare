@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: datashare-postgres
+    environment:
+      POSTGRES_DB: datashare
+      POSTGRES_USER: datashare
+      POSTGRES_PASSWORD: datashare_dev_only
+    ports:
+      - "5432:5432"
+    volumes:
+      - datashare-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  datashare-postgres-data:

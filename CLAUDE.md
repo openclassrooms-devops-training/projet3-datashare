@@ -97,7 +97,9 @@ Les branches `main` et `develop` sont **protégées**. **Aucun push direct**, m�
 
 ### Fil rouge : les étapes de la mission
 
-Le projet suit les 6 étapes du brief OpenClassrooms (voir `.mafal\projet3-datashare\entrants\mission\`). Une branche/un groupe de commits par étape.
+Le projet suit les 6 étapes du brief OpenClassrooms (voir `.mafal\projet3-datashare\entrants\mission\`). **Une branche = une PR = une étape**, dans cet ordre, sans anticiper sur la suivante — le mentor doit pouvoir lire l'historique des PR comme la progression naturelle des étapes du brief.
+
+Avant de commencer le travail d'une étape, relire son fichier dans `entrants/mission/` et comparer précisément son "Résultat attendu" à ce qu'on s'apprête à faire. Piège déjà rencontré sur ce projet : en démarrant l'Étape 2 ("initialisation des applications"), il a été tentant d'ajouter tout de suite JWT, BCrypt et les entités EF Core (`User`, etc.) — mais ça appartient explicitement à l'Étape 3 ("Implémentez votre première User Story", résultat attendu = "un système d'authentification fonctionnel"). Ne pas construire par anticipation ce qu'une étape ultérieure demande explicitement, même si c'est tentant ou "logique" techniquement — ça brouille la lisibilité de la PR pour le mentor et ça duplique le travail entre deux étapes.
 
 ### Workflow
 
