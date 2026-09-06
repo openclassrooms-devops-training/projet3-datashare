@@ -42,12 +42,12 @@ Même logique globale que `projet2-modif-appli` (Spring Boot, `AuthenticationMan
 
 ## Diagrammes
 
-Tous les diagrammes (architecture, MCD, séquences des flux API) sont produits en **Mermaid** (`.mmd`), commités dans `docs/diagrams/` :
+Tous les diagrammes (architecture, MCD, séquences des flux API) sont produits en **Mermaid**, dans des fichiers `.md` (bloc ```mermaid```), commités dans `docs/diagrams/` — jamais en `.mmd` brut, qui ne se rend nulle part sans extension dédiée. En `.md`, le diagramme se voit directement sur GitHub (web, PR) et dans l'aperçu Markdown intégré de VS Code (Ctrl+Shift+V), sans rien installer :
 - `erDiagram` pour le MCD
 - `flowchart`/architecture pour le schéma des briques techniques
 - `sequenceDiagram` pour les flux API critiques (upload, téléchargement, auth)
 
-Avantage : versionnés comme du code (diffables en PR, rendus nativement par GitHub), et réutilisables tels quels dans le support de présentation (soutenance) via la tooling de présentation existante (`C:\workspace\presentation`), qui sait déjà rendre du Mermaid.
+Avantage : versionnés comme du code (diffables en PR), consultables sans outil, et le code source Mermaid est réutilisable tel quel dans le support de présentation (soutenance) via la tooling de présentation existante (`C:\workspace\presentation`), qui sait rendre du Mermaid.
 
 ## Prochaines étapes
 
