@@ -1,1 +1,47 @@
+@import "tailwindcss";
+
 /* You can add global styles to this file, and also import other style files */
+
+/* Socle commun de l'appli : chaque page en herite automatiquement, sans rien declarer */
+
+body {
+  @apply min-h-screen bg-gradient-to-br from-orange-200 via-orange-300 to-red-400;
+}
+
+/* Classes partagees entre les pages d'authentification (login, register...) */
+
+.page {
+  @apply min-h-screen flex items-center justify-center p-4;
+}
+
+.card {
+  @apply bg-white rounded-2xl shadow-lg p-8 w-full max-w-md;
+}
+
+.title {
+  @apply text-2xl font-bold text-center mb-6;
+}
+
+.field-label {
+  @apply block text-sm mb-1;
+}
+
+.field-input {
+  @apply border border-gray-200 rounded-lg px-4 py-2 w-full mb-1 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400;
+}
+
+.field-error {
+  @apply text-red-500 text-sm mb-3;
+}
+
+.field-spacer {
+  @apply mb-4;
+}
+
+.link-text {
+  @apply block text-center text-orange-600 text-sm mb-4;
+}
+
+.btn-primary {
+  @apply bg-orange-50 border border-orange-300 text-orange-600 rounded-lg w-full py-3 font-medium hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed;
+}
