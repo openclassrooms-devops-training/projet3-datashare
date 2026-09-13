@@ -3,6 +3,7 @@ const eslint = require("@eslint/js");
 const { defineConfig } = require("eslint/config");
 const tseslint = require("typescript-eslint");
 const angular = require("angular-eslint");
+const globals = require("globals");
 
 module.exports = defineConfig([
   {
@@ -31,6 +32,14 @@ module.exports = defineConfig([
           style: "kebab-case",
         },
       ],
+    },
+  },
+  {
+    files: ["**/*.spec.ts"],
+    languageOptions: {
+      globals: {
+        ...globals.jest,
+      },
     },
   },
   {
