@@ -33,4 +33,20 @@ export class AuthService {
     //check if the user is authenticated
     return !!localStorage.getItem('access_token');
   }
+
+  getCurrentUserEmail(): string | null {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      return null;
+    }
+
+    try {
+      const payload = token.split('.')[1];
+      const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = JSON.parse(atob(base64));
+      return decoded.email ?? null;
+    } catch {
+      return null;
+    }
+  }
 }

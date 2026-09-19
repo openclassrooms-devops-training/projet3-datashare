@@ -10,8 +10,15 @@ body {
 
 /* Classes partagees entre les pages d'authentification (login, register...) */
 
+/* Sans ca, l'element hote du composant routé (ex. <app-upload>) reste en display
+   par defaut et n'est jamais etire par le flex du parent (.app-shell) - .page a
+   l'interieur n'a alors aucun espace vertical a remplir pour se centrer. */
+app-login, app-register, app-upload {
+  display: contents;
+}
+
 .page {
-  @apply min-h-screen flex items-center justify-center p-4;
+  @apply flex-1 flex items-center justify-center p-4;
 }
 
 .card {
@@ -44,4 +51,80 @@ body {
 
 .btn-primary {
   @apply bg-orange-50 border border-orange-300 text-orange-600 rounded-lg w-full py-3 font-medium hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+/* Classes partagees pour le header, present sur toutes les pages */
+
+.app-shell {
+  @apply min-h-screen flex flex-col;
+}
+
+.header {
+  @apply flex items-center justify-between p-4;
+}
+
+.header-logo {
+  @apply text-2xl font-extrabold text-gray-900 no-underline;
+}
+
+.header-cta {
+  @apply bg-gray-900 text-white rounded-lg px-4 py-2 text-sm font-medium no-underline hover:bg-gray-800;
+}
+
+.header-avatar {
+  @apply flex items-center justify-center w-10 h-10 rounded-full bg-gray-900 text-white text-sm font-semibold cursor-pointer border-0 hover:bg-gray-800;
+}
+
+/* Classes partagees pour l'ecran d'upload */
+
+.btn-secondary {
+  @apply bg-white border border-gray-200 text-gray-600 rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-50;
+}
+
+.file-row {
+  @apply flex items-center gap-3 mb-2;
+}
+
+.file-row-info {
+  @apply flex-1 min-w-0;
+}
+
+.file-row-info p {
+  @apply truncate;
+}
+
+/* Zone de depot (drop zone) : cercle sombre + halo qui pulse en continu, s'intensifie au survol/glissement */
+
+.dropzone-wrapper {
+  @apply relative flex items-center justify-center mx-auto mb-6 cursor-pointer;
+  width: 140px;
+  height: 140px;
+}
+
+.dropzone-halo {
+  @apply absolute inset-0 rounded-full bg-gray-900/10 transition-colors;
+  animation: dropzone-pulse 2.5s ease-in-out infinite;
+}
+
+.dropzone-wrapper-active .dropzone-halo {
+  @apply bg-orange-400/30;
+  animation: dropzone-pulse-active 1s ease-in-out infinite;
+}
+
+.dropzone-circle {
+  @apply relative z-10 flex items-center justify-center w-20 h-20 rounded-full bg-gray-900 text-white transition-colors;
+}
+
+.dropzone-wrapper-active .dropzone-circle {
+  @apply bg-orange-600;
+}
+
+@keyframes dropzone-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 0.85; }
+}
+
+@keyframes dropzone-pulse-active {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.18); opacity: 1; }
 }

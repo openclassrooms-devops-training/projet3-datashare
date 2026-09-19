@@ -56,6 +56,18 @@ builder.Services.AddDbContext<DataShare.Api.AppDbContext>(options =>
 
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IFileService, FileService>();
+builder.Services.AddSingleton<IFileTypeValidationService, FileTypeValidationService>();
+builder.Services.AddScoped<IDownloadToken, DownloadToken>();
+
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 1024L * 1024 * 1024; // 1 Go
+});
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 1024L * 1024 * 1024;
+});
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key manquant dans la configuration");
@@ -84,6 +96,10 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader()
               .AllowAnyMethod());
 });
+
+var storageRootPath = builder.Configuration["fileStorage:path"]
+    ?? throw new InvalidOperationException("fileStorage:path manquant dans la configuration");
+Directory.CreateDirectory(storageRootPath);
 
 var app = builder.Build();
 
