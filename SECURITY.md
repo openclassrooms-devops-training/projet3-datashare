@@ -42,3 +42,23 @@ Document vivant, enrichi au fil des étapes du projet (pas rédigé d'un bloc à
 **Comment le risque XSS est limité autrement, en compensation** : Angular échappe automatiquement tout contenu inséré via l'interpolation standard (`{{ }}`) ou le binding de propriété — le risque XSS ne s'active que via un usage explicite de `[innerHTML]`/`bypassSecurityTrustHtml`, qu'on évite pour tout contenu fourni par un utilisateur (voir le vault de cours pour le détail du mécanisme). Tant que cette discipline est respectée, la surface XSS réelle du projet reste faible.
 
 **À reconsidérer si** : le projet évoluait vers plusieurs clients (appli mobile, autre frontend) ou une exigence de sécurité plus stricte — le pattern cookie `httpOnly` + BFF deviendrait alors plus justifié.
+
+## Upload de fichiers (US01)
+
+### Validation du type réel du fichier (magic bytes)
+
+**Décision** : ne jamais faire confiance à l'extension du fichier ni au `Content-Type` déclaré par le client (les deux sont trivialement falsifiables — un `.exe` renommé en `.pdf` avec un `Content-Type: application/pdf` forgé passerait sans contrôle). Le type réel est détecté côté serveur via sa signature binaire (`FileTypeValidationService`, bibliothèque `Mime-Detective`), comparé à une allowlist, et croisé avec l'extension déclarée pour détecter une incohérence. Décision complète et justification détaillée : `docs/adr/0002-validation-type-fichiers.md`.
+
+**Pourquoi documenté ici aussi** : c'est la seule ligne de défense contre l'upload d'un exécutable ou d'un script malveillant déguisé en document — sans elle, n'importe qui pourrait déposer un fichier dangereux et le faire télécharger à un tiers via le lien de partage.
+
+### L'identité de l'uploadeur vient du token, jamais du body client
+
+**Décision** : l'id de l'utilisateur propriétaire d'un fichier est lu depuis la claim `sub` du JWT (côté serveur, dans `FilesController`), jamais depuis un champ du formulaire envoyé par le client.
+
+**Pourquoi ça a failli être fait autrement** : une première version de `FileRequest`/`FileService` acceptait un champ `User`/`UserId` directement dans le body `multipart/form-data` — repéré et corrigé en revue avant merge. Si ça avait été livré tel quel, n'importe quel utilisateur authentifié aurait pu uploader un fichier en se faisant passer pour un autre (usurpation d'appartenance), simplement en changeant ce champ dans la requête. Ne jamais faire confiance à une identité fournie par le client quand elle est déjà disponible de façon fiable via le token d'authentification.
+
+### Nom de fichier sur disque : le token de téléchargement, jamais le nom original
+
+**Décision** : le fichier est écrit sur le disque sous le nom `{downloadToken}{extension}` — le nom original du client (`OriginalFilename`) n'est stocké qu'en base, jamais réutilisé comme chemin de fichier réel.
+
+**Pourquoi** : un nom de fichier fourni par l'utilisateur est une donnée non fiable comme n'importe quelle autre entrée client — l'utiliser directement dans un `Path.Combine` exposerait à une traversée de chemin (ex. un nom contenant `../`) si jamais un contrôle en amont venait à manquer, et évite aussi les collisions entre deux uploads du même nom de fichier.
