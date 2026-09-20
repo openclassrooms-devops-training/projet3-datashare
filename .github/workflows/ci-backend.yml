@@ -28,11 +28,29 @@ jobs:
     name: Tests
     runs-on: ubuntu-latest
     needs: build
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: datashare
+          POSTGRES_USER: datashare
+          POSTGRES_PASSWORD: datashare_dev_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+      # Base dediee aux tests d'integration (DataShare.IntegrationTests) - distincte
+      # de la base "datashare", cf. backend/README.md pour l'equivalent en local.
+      - name: Create integration test database
+        run: PGPASSWORD=datashare_dev_only psql -h localhost -U datashare -d datashare -c "CREATE DATABASE datashare_integration_test;"
       - run: dotnet restore
       - run: dotnet test --no-restore --collect:"XPlat Code Coverage" --results-directory ./coverage
       - uses: actions/upload-artifact@v4

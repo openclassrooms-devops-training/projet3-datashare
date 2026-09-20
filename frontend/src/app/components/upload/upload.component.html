@@ -9,7 +9,12 @@
       <div
         class="dropzone-wrapper"
         [class.dropzone-wrapper-active]="isDraggingOver"
+        role="button"
+        tabindex="0"
+        aria-label="Ajouter un fichier"
         (click)="fileInput.click()"
+        (keydown.enter)="fileInput.click()"
+        (keydown.space)="fileInput.click()"
         (dragover)="onDragOver($event)"
         (dragleave)="onDragLeave($event)"
         (drop)="onDrop($event)"
