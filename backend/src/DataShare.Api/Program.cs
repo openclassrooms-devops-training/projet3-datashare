@@ -125,3 +125,8 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 
 app.Run();
+
+// Classe partielle publique requise pour que WebApplicationFactory<Program> (tests
+// d'integration) puisse referencer ce point d'entree - sans ca, Program reste implicite
+// et inaccessible depuis un autre projet.
+public partial class Program { }

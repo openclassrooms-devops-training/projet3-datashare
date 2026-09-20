@@ -53,4 +53,19 @@ k6 respecte nativement `HTTP_PROXY`/`HTTPS_PROXY`. **Attention** : beaucoup de p
 
 ## Budget de performance front
 
-Pas encore mesuré (taille du bundle Angular, temps de premier rendu). À compléter — cf. `ng build` (déjà exécuté au fil du développement, taille du bundle initial ~1,5 Mo, jamais analysée spécifiquement sous l'angle performance).
+**Mécanisme** : Angular CLI a un système natif de **budgets de performance** (`frontend/angular.json`, section `budgets`), déjà scaffoldé par défaut à la création du projet — vérifié automatiquement à **chaque `ng build` en mode production** (pas un test manuel ponctuel comme k6 : si le bundle dépasse le seuil un jour, le build échoue tout seul).
+
+| Type | Avertissement | Erreur (build cassé) |
+|---|---|---|
+| `initial` (bundle principal chargé au démarrage) | 500 Ko | 1 Mo |
+| `anyComponentStyle` (CSS d'un composant) | 4 Ko | 8 Ko |
+
+**Résultat réel** (`npx ng build`, mode production, 2026-09-19) :
+
+```
+Initial total : 273.70 kB (brut) / 77.23 kB (estime apres compression)
+```
+
+**Interprétation** : largement sous le seuil d'avertissement (500 Ko), très loin du seuil d'erreur (1 Mo) — aucune alerte de budget déclenchée. Pas d'action nécessaire pour l'instant ; ce chiffre est une référence à surveiller si l'application grossit (nouvelles US, dépendances ajoutées).
+
+*Note sans lien avec la performance* : le build production a fait remonter un avertissement préexistant (`10 rules skipped due to selector errors`), causé par plusieurs fichiers `*.component.css` restés vides depuis leur scaffolding (Étape 2/3) — cosmétique, ne bloque pas le build, à nettoyer un jour à l'occasion.

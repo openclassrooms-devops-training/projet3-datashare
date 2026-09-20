@@ -22,7 +22,7 @@ dotnet test tests/DataShare.UnitTests
 
 | US | Fichiers | Couverture |
 |---|---|---|
-| US03/US04 (auth) | `AuthServiceTests.cs`, `AuthControllerTests.cs` | 100% sauf `RefreshTokenAsync` (86% branches) — cas "vol de refresh token détecté" non testable en InMemory (`ExecuteUpdateAsync` non supporté), documenté dans le fichier de test, à couvrir en intégration |
+| US03/US04 (auth) | `AuthServiceTests.cs`, `AuthControllerTests.cs` | 100% sauf `RefreshTokenAsync` (86% branches) — cas "vol de refresh token détecté" non testable en InMemory (`ExecuteUpdateAsync` non supporté), documenté dans le fichier de test, **couvert en intégration** (voir plus bas) |
 | US01 (upload) | `FileServiceTests.cs`, `FilesControllerTests.cs` | `FilesController` 100% ; `FileService.UploadAsync` 100% lignes / 90,6% branches — la branche `status = "expired"` est inatteignable à l'upload (une expiration fraîchement calculée est toujours dans le futur), documenté dans le fichier de test |
 
 36 tests au total, 0 échec.
@@ -52,15 +52,33 @@ cd frontend && npx cypress run
 
 | Scénario | Fichier | Statut |
 |---|---|---|
-| Inscription → connexion → upload d'un fichier | `cypress/e2e/register-login-upload.cy.ts` | ✅ passant, exécuté réellement contre le backend/frontend en marche |
+| Inscription → connexion → upload d'un fichier | `cypress/e2e/register-login-upload.cy.ts` | ✅ passant |
+| Connexion avec mauvais mot de passe | `cypress/e2e/error-scenarios.cy.ts` | ✅ passant |
+| Upload : type de fichier non supporté | `cypress/e2e/error-scenarios.cy.ts` | ✅ passant |
+| Upload : mot de passe fichier trop court | `cypress/e2e/error-scenarios.cy.ts` | ✅ passant |
 
-Objectif spec : 2-3 scénarios critiques minimum — celui-ci est le premier (le plus englobant, couvre 3 US d'un coup). D'autres scénarios (échec de connexion, fichier trop volumineux, etc.) restent à ajouter.
+4 tests, tous exécutés réellement contre le backend/frontend en marche, 0 échec. Objectif spec (2-3 scénarios critiques minimum) dépassé.
 
-**Piège rencontré, à connaître** : `cy.url().should('include', ...)` juste après un clic de soumission peut timeout (4s par défaut) si la première requête réseau met du temps à répondre (cold start). Préférer intercepter la requête (`cy.intercept(...).as('x')` + `cy.wait('@x')`) avant de vérifier la navigation qui en découle — plus robuste, et donne le vrai code HTTP en cas d'échec au lieu d'un timeout muet.
+**Piège rencontré à deux reprises, à connaître** : après un clic de soumission, `cy.contains(...)`/`cy.url().should(...)` peuvent timeout (4s par défaut) si la requête réseau met du temps à répondre (cold start, ou simplement le temps de l'aller-retour). Systématiquement intercepter la requête (`cy.intercept(...).as('x')` + `cy.wait('@x')`) avant de vérifier ce qui en découle (navigation, message affiché) — plus robuste, et donne le vrai code HTTP en cas d'échec au lieu d'un timeout muet.
+
+**Piège d'origine avec `localStorage`** : pour poser un token directement (bypass du formulaire, plus rapide pour les tests qui ne portent pas sur le login lui-même), il faut `cy.visit(...)` sur l'origine du frontend **avant** d'écrire dans `window.localStorage` — le storage est isolé par origine, l'écrire avant la première visite l'envoie au mauvais endroit.
 
 ## Tests d'intégration backend
 
-`DataShare.IntegrationTests` est scaffoldé (projet créé à l'Étape 2) mais vide. Prévu après les tests E2E — utilisera `WebApplicationFactory` + une vraie base, pour valider le pipeline HTTP réel (routing, `[Authorize]`, sérialisation) sans mocker les services, contrairement aux tests unitaires. C'est aussi là que le cas non couvert en unitaire (révocation en cascade des refresh tokens) pourra être testé pour de vrai.
+`WebApplicationFactory` (`CustomWebApplicationFactory.cs`) démarre l'API réelle (vrai routing, vrai `[Authorize]`, vrais middlewares) contre une **vraie base Postgres dédiée** (`datashare_integration_test`, distincte de la base de dev) — rien n'est mocké, contrairement aux tests unitaires. Setup de la base : voir `backend/README.md`.
+
+Exécution :
+```bash
+cd backend
+dotnet test tests/DataShare.IntegrationTests
+```
+
+| Fichier | Ce qui est vérifié |
+|---|---|
+| `AuthIntegrationTests.cs` | Register → login → refresh (parcours complet réel) ; **révocation en cascade des refresh tokens** (le cas non testable en unitaire avec EF Core InMemory — couvert ici pour de vrai) ; email déjà utilisé → 400 |
+| `FilesIntegrationTests.cs` | Upload avec token valide → 201, fichier réellement écrit sur disque + ligne réellement persistée en base ; upload sans token → 401 (vérifie que `[Authorize]` est réellement appliqué par le pipeline, pas juste supposé) ; type de fichier non supporté → 400, avec la vraie `FileTypeValidationService` (pas un mock) |
+
+6 tests, 0 échec.
 
 ## Couverture de code
 
