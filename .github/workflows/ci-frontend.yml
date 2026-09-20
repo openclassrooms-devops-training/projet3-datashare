@@ -48,6 +48,25 @@ jobs:
     name: Tests e2e (Cypress)
     runs-on: ubuntu-latest
     needs: lint
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: datashare
+          POSTGRES_USER: datashare
+          POSTGRES_PASSWORD: datashare_dev_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ConnectionStrings__DataShare: "Host=localhost;Port=5432;Database=datashare;Username=datashare;Password=datashare_dev_only"
+      Jwt__Key: "ci-e2e-signing-key-at-least-32-characters-long"
+      fileStorage__path: "/tmp/datashare-e2e-storage"
+      App__BaseUrl: "http://localhost:4200"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -66,6 +85,33 @@ jobs:
           else
             echo "has_specs=true" >> "$GITHUB_OUTPUT"
           fi
+      # Les scenarios Cypress appellent une vraie API (pas de mock) : il faut demarrer
+      # le vrai backend .NET contre la vraie base Postgres du job, migrations comprises.
+      - uses: actions/setup-dotnet@v4
+        if: steps.e2e-check.outputs.has_specs == 'true'
+        with:
+          dotnet-version: "8.0.x"
+      - name: Apply database migrations
+        if: steps.e2e-check.outputs.has_specs == 'true'
+        working-directory: backend
+        run: |
+          dotnet tool install --global dotnet-ef --version 8.*
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          dotnet ef database update --project src/DataShare.Api
+      - name: Start backend
+        if: steps.e2e-check.outputs.has_specs == 'true'
+        working-directory: backend
+        run: |
+          dotnet run --project src/DataShare.Api --urls http://localhost:5074 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5074/health > /dev/null; then
+              echo "Backend pret"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Le backend n'a pas demarre a temps"
+          exit 1
       - run: npm run e2e:ci
         if: steps.e2e-check.outputs.has_specs == 'true'
       - uses: actions/upload-artifact@v4

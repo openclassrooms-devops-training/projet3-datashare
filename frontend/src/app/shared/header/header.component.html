@@ -1,0 +1,11 @@
+<header class="header">
+  <a routerLink="/" class="header-logo">DataShare</a>
+
+  @if (isAuthenticated) {
+    <button type="button" class="header-avatar" [title]="'Se déconnecter'" (click)="logout()">
+      {{ initials }}
+    </button>
+  } @else {
+    <a routerLink="/login" class="header-cta">Se connecter</a>
+  }
+</header>

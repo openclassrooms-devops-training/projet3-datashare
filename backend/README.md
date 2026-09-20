@@ -13,6 +13,14 @@ dotnet user-secrets set "ConnectionStrings:DataShare" "Host=localhost;Port=5432;
 
 (Les identifiants doivent correspondre à ceux de `docker-compose.yml` à la racine.)
 
+**Base dédiée aux tests d'intégration** (`DataShare.IntegrationTests`, distincte de la base de dev, jamais partagée) — à créer une seule fois :
+
+```bash
+docker exec -i datashare-postgres psql -U datashare -d datashare -c "CREATE DATABASE datashare_integration_test;"
+```
+
+Les tests d'intégration (`CustomWebApplicationFactory`) recréent le schéma à chaque run (`EnsureDeletedAsync` + `MigrateAsync`) — seule la base elle-même doit exister au préalable.
+
 ## Commandes utiles
 
 ```bash
@@ -22,13 +30,16 @@ docker compose up -d
 # Lancer l'API
 dotnet run --project src/DataShare.Api
 
-# Tests
-dotnet test
-dotnet test --collect:"XPlat Code Coverage"
+# Tests unitaires
+dotnet test tests/DataShare.UnitTests
+dotnet test tests/DataShare.UnitTests --collect:"XPlat Code Coverage"
+
+# Tests d'intégration (necessite la base dediee, voir ci-dessus)
+dotnet test tests/DataShare.IntegrationTests
 ```
 
 Swagger UI disponible en développement sur `/swagger`, health check sur `/health`.
 
-Aucune entité métier pour l'instant (`AppDbContext` vide) — elles arrivent au fil des étapes, avec l'implémentation des User Stories correspondantes (voir `docs/diagrams/mcd.md` pour le MCD cible).
+Voir `docs/diagrams/mcd.md` pour le MCD cible (`USER`, `REFRESH_TOKEN`, `FILE`, `TAG`).
 
 Voir les conventions dans le [`CLAUDE.md`](../CLAUDE.md) racine.
