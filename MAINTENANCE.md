@@ -18,3 +18,15 @@ Document vivant, enrichi au fil des étapes du projet (pas rédigé d'un bloc à
 - Une contrainte PostgreSQL native (ex. partitionnement par date + `DROP` de partition) — probablement disproportionné pour le volume de ce prototype, à ne considérer que si le volume réel le justifie un jour.
 
 Pas bloquant pour l'Étape 3 (l'authentification fonctionne très bien sans ce nettoyage) — à traiter à l'Étape 5/6 (qualité/maintenance) ou plus tard si le temps manque.
+
+## Interface
+
+### Avatar utilisateur : initiales plutôt que photo + prénom/nom
+
+**Constat** : la maquette Figma "Mon espace" (variante mobile, iPhone 16 - 5/6) montre un avatar avec photo de profil et prénom/nom ("Claire Marie") dans le header. Notre modèle de données (`User`) ne capture qu'un email à l'inscription — pas de prénom/nom, pas de photo de profil. On utilise donc les 2 premières lettres de l'email en majuscules comme avatar de substitution (voir l'historique de `HeaderComponent`, US01), au lieu de reproduire fidèlement ce détail de la maquette.
+
+**Pourquoi pas corrigé** : aucune US du brief ne demande de prénom/nom ni de photo de profil — ça relève des "fonctionnalités avancées" explicitement exclues du prototype (voir `00-mission-brief.md`). Pas de valeur à l'ajouter sans qu'une US le demande.
+
+**Autre écart lié, note pour memoire** : la maquette mobile a aussi un agencement distinct (menu hamburger, onglets en pilule type "Switch Component", bouton "..." par fichier au lieu de Supprimer/Accéder explicites) qu'on n'a pas reproduit — l'écran "Mon espace" actuel est responsive (la sidebar passe en colonne sur petit écran) mais pas une refonte mobile dédiée. Idem : pas demandé par une US, périmètre volontairement limité pour ce prototype.
+
+**À faire si le produit évolue** : ajouter `FirstName`/`LastName` (et une URL de photo) à l'entité `User`, un écran de complétion de profil, et une variante mobile dédiée de l'interface plutôt qu'un simple responsive.

@@ -20,7 +20,9 @@ public class FileTypeValidationService : IFileTypeValidationService
         ["image/png"] = new[] { ".png" },
         ["image/jpeg"] = new[] { ".jpg", ".jpeg" },
         ["image/gif"] = new[] { ".gif" },
-        ["application/zip"] = new[] { ".zip" }
+        ["application/zip"] = new[] { ".zip" },
+        ["audio/mpeg"] = new[] { ".mp3" },
+        ["video/mp4"] = new[] { ".mp4" }
     };
 
     private readonly ILogger<FileTypeValidationService> _logger;

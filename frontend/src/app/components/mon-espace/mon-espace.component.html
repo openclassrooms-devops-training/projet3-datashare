@@ -1,0 +1,104 @@
+<div class="mon-espace-layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">DataShare</div>
+    <nav class="sidebar-nav">
+      <a routerLink="/mon-espace" class="sidebar-link">Mes fichiers</a>
+    </nav>
+    <p class="sidebar-copyright">Copyright DataShare© 2026</p>
+  </aside>
+
+  <main class="mon-espace-main">
+
+    <div class="mon-espace-topbar">
+      <a routerLink="/upload" class="header-cta">Ajouter des fichiers</a>
+      <button type="button" class="btn-logout-link" (click)="logout()">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" />
+        </svg>
+        Déconnexion
+      </button>
+    </div>
+
+    <h1 class="title text-left">Mes fichiers</h1>
+
+    <div class="tabs">
+      <button type="button" class="tab" [class.tab-active]="activeTab === 'all'" (click)="setTab('all')">Tous</button>
+      <button type="button" class="tab" [class.tab-active]="activeTab === 'active'" (click)="setTab('active')">Actifs</button>
+      <button type="button" class="tab" [class.tab-active]="activeTab === 'expired'" (click)="setTab('expired')">Expiré</button>
+    </div>
+
+    @if (errorMessage) {
+      <p class="field-error">{{ errorMessage }}</p>
+    }
+
+    @for (file of files; track file.id) {
+      <div class="card file-card">
+        <div class="file-row">
+          @switch (fileIconType(file)) {
+            @case ('image') {
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                <circle cx="9" cy="9" r="2" />
+                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+              </svg>
+            }
+            @case ('audio') {
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+            }
+            @case ('video') {
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                <path d="m10 9 5 3-5 3z" />
+              </svg>
+            }
+            @default {
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z" />
+                <path d="M14 2v6h6" />
+              </svg>
+            }
+          }
+          <div class="file-row-info">
+            <p class="font-medium">{{ file.filename }}</p>
+            <p class="text-sm text-gray-500">{{ formatExpiry(file) }}</p>
+          </div>
+
+          @if (file.hasPassword) {
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-gray-400">
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          }
+
+          @if (file.status !== 'expired') {
+            <div class="file-row-actions">
+              <button type="button" class="btn-secondary shrink-0 flex items-center gap-1" (click)="onDelete(file)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                Supprimer
+              </button>
+              <a [href]="file.downloadUrl" class="btn-file-access">
+                Accéder
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+                </svg>
+              </a>
+            </div>
+          } @else {
+            <p class="text-sm text-gray-500">Ce fichier a expiré, il n'est plus stocké chez nous</p>
+          }
+        </div>
+      </div>
+    } @empty {
+      <p class="text-gray-500">Aucun fichier pour l'instant.</p>
+    }
+
+  </main>
+
+</div>
