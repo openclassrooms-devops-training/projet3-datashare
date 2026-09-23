@@ -120,4 +120,193 @@ public class FilesIntegrationTests
         var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
         Assert.AreEqual("UNSUPPORTED_FILE_TYPE", error!.Code);
     }
+
+    private async Task<FileResponse> UploadFileAsync(string accessToken, byte[]? content = null, string fileName = "report.pdf", string? password = null)
+    {
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        var uploadContent = CreateUploadContent(content ?? ValidPdfContent, fileName);
+        if (password != null)
+        {
+            uploadContent.Add(new StringContent(password), "password");
+        }
+        var response = await _client.PostAsync("/api/files", uploadContent);
+        Assert.AreEqual(HttpStatusCode.Created, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<FileResponse>())!;
+    }
+
+    private static string ExtractDownloadToken(string downloadUrl) => downloadUrl.Split('/').Last();
+
+    // ---------- GET /api/files (US05) ----------
+
+    [TestMethod]
+    public async Task GetFiles_ReturnsOnlyTheAuthenticatedUsersFiles()
+    {
+        // Arrange
+        var ownerToken = await RegisterAndLoginAsync();
+        await UploadFileAsync(ownerToken, fileName: "mine.pdf");
+
+        var otherUserToken = await RegisterAndLoginAsync();
+        await UploadFileAsync(otherUserToken, fileName: "not-mine.pdf");
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ownerToken);
+
+        // Act
+        var response = await _client.GetAsync("/api/files");
+
+        // Assert
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var files = await response.Content.ReadFromJsonAsync<List<FileResponse>>();
+        Assert.AreEqual(1, files!.Count);
+        Assert.AreEqual("mine.pdf", files[0].Filename);
+    }
+
+    [TestMethod]
+    public async Task GetFiles_WithoutAuthorizationHeader_ReturnsUnauthorized()
+    {
+        // Act
+        var response = await _client.GetAsync("/api/files");
+
+        // Assert
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    // ---------- DELETE /api/files/{id} (US06) ----------
+
+    [TestMethod]
+    public async Task DeleteFile_WhenOwnerDeletes_ReturnsNoContentAndRemovesFileFromDiskAndDb()
+    {
+        // Arrange
+        var accessToken = await RegisterAndLoginAsync();
+        var uploaded = await UploadFileAsync(accessToken);
+
+        using var scope = _factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var storagePath = (await dbContext.Files.SingleAsync()).StoragePath;
+
+        // Act
+        var response = await _client.DeleteAsync($"/api/files/{uploaded.Id}");
+
+        // Assert
+        Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.IsFalse(await dbContext.Files.AnyAsync());
+        Assert.IsFalse(File.Exists(storagePath));
+    }
+
+    [TestMethod]
+    public async Task DeleteFile_WhenNotOwner_ReturnsForbiddenAndDoesNotDeleteTheFile()
+    {
+        // Arrange : reproduit bout en bout (vraie authentification, vraie base) le scenario
+        // IDOR corrige sur la suppression - voir SECURITY.md.
+        var ownerToken = await RegisterAndLoginAsync();
+        var uploaded = await UploadFileAsync(ownerToken);
+
+        var attackerToken = await RegisterAndLoginAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", attackerToken);
+
+        // Act
+        var response = await _client.DeleteAsync($"/api/files/{uploaded.Id}");
+
+        // Assert
+        Assert.AreEqual(HttpStatusCode.Forbidden, response.StatusCode);
+        using var scope = _factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.IsTrue(await dbContext.Files.AnyAsync(f => f.Id == uploaded.Id));
+    }
+
+    [TestMethod]
+    public async Task DeleteFile_WhenFileDoesNotExist_ReturnsNotFound()
+    {
+        // Arrange
+        var accessToken = await RegisterAndLoginAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        // Act
+        var response = await _client.DeleteAsync($"/api/files/{Guid.NewGuid()}");
+
+        // Assert
+        Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ---------- GET/POST /api/files/download/{token} (US02) ----------
+
+    [TestMethod]
+    public async Task GetFileMetadata_WithValidToken_ReturnsMetadataWithoutAuthentication()
+    {
+        // Arrange
+        var accessToken = await RegisterAndLoginAsync();
+        var uploaded = await UploadFileAsync(accessToken, fileName: "public.pdf");
+        var token = ExtractDownloadToken(uploaded.DownloadUrl);
+
+        // Act : nouveau client sans header Authorization - verifie l'accessibilite publique
+        var anonymousClient = _factory.CreateClient();
+        var response = await anonymousClient.GetAsync($"/api/files/download/{token}");
+
+        // Assert
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var metadata = await response.Content.ReadFromJsonAsync<FileMetadataResponse>();
+        Assert.AreEqual("public.pdf", metadata!.Filename);
+        Assert.IsFalse(metadata.RequiresPassword);
+    }
+
+    [TestMethod]
+    public async Task GetFileMetadata_WithInvalidToken_ReturnsNotFound()
+    {
+        // Act
+        var response = await _client.GetAsync("/api/files/download/token-inexistant");
+
+        // Assert
+        Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task DownloadFile_WithoutPasswordWhenNoneRequired_ReturnsTheActualFileContent()
+    {
+        // Arrange
+        var accessToken = await RegisterAndLoginAsync();
+        var uploaded = await UploadFileAsync(accessToken);
+        var token = ExtractDownloadToken(uploaded.DownloadUrl);
+        var anonymousClient = _factory.CreateClient();
+
+        // Act
+        var response = await anonymousClient.PostAsync($"/api/files/download/{token}", content: null);
+
+        // Assert : le flux binaire recu est bien le contenu reellement uploade
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var receivedBytes = await response.Content.ReadAsByteArrayAsync();
+        CollectionAssert.AreEqual(ValidPdfContent, receivedBytes);
+    }
+
+    [TestMethod]
+    public async Task DownloadFile_WithCorrectPassword_ReturnsTheFileContent()
+    {
+        // Arrange
+        var accessToken = await RegisterAndLoginAsync();
+        var uploaded = await UploadFileAsync(accessToken, password: "secret123");
+        var token = ExtractDownloadToken(uploaded.DownloadUrl);
+        var anonymousClient = _factory.CreateClient();
+
+        // Act
+        var response = await anonymousClient.PostAsJsonAsync($"/api/files/download/{token}", new { password = "secret123" });
+
+        // Assert
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var receivedBytes = await response.Content.ReadAsByteArrayAsync();
+        CollectionAssert.AreEqual(ValidPdfContent, receivedBytes);
+    }
+
+    [TestMethod]
+    public async Task DownloadFile_WithWrongPassword_ReturnsUnauthorized()
+    {
+        // Arrange
+        var accessToken = await RegisterAndLoginAsync();
+        var uploaded = await UploadFileAsync(accessToken, password: "secret123");
+        var token = ExtractDownloadToken(uploaded.DownloadUrl);
+        var anonymousClient = _factory.CreateClient();
+
+        // Act
+        var response = await anonymousClient.PostAsJsonAsync($"/api/files/download/{token}", new { password = "mauvais-mot-de-passe" });
+
+        // Assert
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
 }

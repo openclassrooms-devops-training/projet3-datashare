@@ -27,6 +27,7 @@ frontend/typings
 # Cypress
 frontend/cypress/videos/
 frontend/cypress/screenshots/
+frontend/cypress/downloads/
 
 # === IDE ===
 .vs/

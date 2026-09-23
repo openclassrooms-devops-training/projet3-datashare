@@ -231,4 +231,275 @@ public class FileServiceTests
         var storedFile = await _dbContext.Files.Include(f => f.Tags).SingleAsync();
         CollectionAssert.AreEquivalent(new List<string> { "facture", "2026" }, storedFile.Tags.Select(t => t.Label).ToList());
     }
+
+    // ---------- Helpers communs aux tests US02/US05/US06 ----------
+
+    private DataShare.Api.Models.File AddFileRecord(
+        Guid? userId,
+        string originalFilename = "doc.pdf",
+        DateTime? expiresAt = null,
+        string? passwordHash = null,
+        bool writePhysicalFile = false,
+        string content = "contenu-de-test")
+    {
+        var downloadToken = Guid.NewGuid().ToString("N");
+        var storagePath = Path.Combine(_storagePath, downloadToken + Path.GetExtension(originalFilename));
+
+        if (writePhysicalFile)
+        {
+            Directory.CreateDirectory(_storagePath);
+            File.WriteAllText(storagePath, content);
+        }
+
+        var fileRecord = new DataShare.Api.Models.File
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            OriginalFilename = originalFilename,
+            ContentType = "application/pdf",
+            StoragePath = storagePath,
+            SizeBytes = content.Length,
+            DownloadToken = downloadToken,
+            PasswordHash = passwordHash,
+            ExpiresAt = expiresAt ?? DateTime.UtcNow.AddDays(7),
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.Files.Add(fileRecord);
+        _dbContext.SaveChanges();
+        return fileRecord;
+    }
+
+    // ---------- GetFilesForUserAsync (US05) ----------
+
+    [TestMethod]
+    public async Task GetFilesForUserAsync_OnlyReturnsFilesBelongingToTheRequestingUser()
+    {
+        // Arrange
+        var otherUserId = Guid.NewGuid();
+        AddFileRecord(TestUserId, "mine.pdf");
+        AddFileRecord(otherUserId, "not-mine.pdf");
+
+        // Act
+        var result = await _fileService.GetFilesForUserAsync(TestUserId, "all");
+
+        // Assert
+        Assert.AreEqual(1, result.Count);
+        Assert.AreEqual("mine.pdf", result[0].Filename);
+    }
+
+    [TestMethod]
+    public async Task GetFilesForUserAsync_WithStatusActive_ExcludesExpiredFiles()
+    {
+        // Arrange
+        AddFileRecord(TestUserId, "actif.pdf", expiresAt: DateTime.UtcNow.AddDays(1));
+        AddFileRecord(TestUserId, "expire.pdf", expiresAt: DateTime.UtcNow.AddDays(-1));
+
+        // Act
+        var result = await _fileService.GetFilesForUserAsync(TestUserId, "active");
+
+        // Assert
+        Assert.AreEqual(1, result.Count);
+        Assert.AreEqual("actif.pdf", result[0].Filename);
+    }
+
+    [TestMethod]
+    public async Task GetFilesForUserAsync_WithStatusExpired_ExcludesActiveFiles()
+    {
+        // Arrange
+        AddFileRecord(TestUserId, "actif.pdf", expiresAt: DateTime.UtcNow.AddDays(1));
+        AddFileRecord(TestUserId, "expire.pdf", expiresAt: DateTime.UtcNow.AddDays(-1));
+
+        // Act
+        var result = await _fileService.GetFilesForUserAsync(TestUserId, "expired");
+
+        // Assert
+        Assert.AreEqual(1, result.Count);
+        Assert.AreEqual("expire.pdf", result[0].Filename);
+    }
+
+    [TestMethod]
+    public async Task GetFilesForUserAsync_IncludesTags()
+    {
+        // Arrange : regression sur l'oubli de .Include(f => f.Tags) - sans lui, Tags
+        // revient toujours vide meme si des tags existent reellement en base.
+        var fileRecord = AddFileRecord(TestUserId, "avec-tags.pdf");
+        fileRecord.Tags.Add(new DataShare.Api.Models.Tag { Label = "facture" });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _fileService.GetFilesForUserAsync(TestUserId, "all");
+
+        // Assert
+        CollectionAssert.AreEquivalent(new List<string> { "facture" }, result[0].Tags);
+    }
+
+    // ---------- DeleteAsync (US06) ----------
+
+    [TestMethod]
+    public async Task DeleteAsync_WhenFileDoesNotExist_ThrowsFileRecordNotFoundException()
+    {
+        await Assert.ThrowsExceptionAsync<FileRecordNotFoundException>(
+            () => _fileService.DeleteAsync(Guid.NewGuid(), TestUserId));
+    }
+
+    [TestMethod]
+    public async Task DeleteAsync_WhenFileBelongsToAnotherUser_ThrowsFileAccessForbiddenException()
+    {
+        // Arrange
+        var ownerUserId = Guid.NewGuid();
+        var fileRecord = AddFileRecord(ownerUserId, writePhysicalFile: true);
+
+        // Act & Assert : TestUserId n'est pas le proprietaire
+        await Assert.ThrowsExceptionAsync<FileAccessForbiddenException>(
+            () => _fileService.DeleteAsync(fileRecord.Id, TestUserId));
+
+        // Le fichier ne doit pas avoir ete supprime malgre la tentative
+        Assert.IsTrue(File.Exists(fileRecord.StoragePath));
+        Assert.IsNotNull(await _dbContext.Files.FindAsync(fileRecord.Id));
+    }
+
+    [TestMethod]
+    public async Task DeleteAsync_WhenOwnerDeletes_RemovesDbRowAndPhysicalFile()
+    {
+        // Arrange
+        var fileRecord = AddFileRecord(TestUserId, writePhysicalFile: true);
+        var storagePath = fileRecord.StoragePath;
+
+        // Act
+        await _fileService.DeleteAsync(fileRecord.Id, TestUserId);
+
+        // Assert
+        Assert.IsNull(await _dbContext.Files.FindAsync(fileRecord.Id));
+        Assert.IsFalse(File.Exists(storagePath));
+    }
+
+    // ---------- GetMetadataByTokenAsync (US02) ----------
+
+    [TestMethod]
+    public async Task GetMetadataByTokenAsync_WhenTokenDoesNotExist_ThrowsFileNotFoundOrExpiredException()
+    {
+        await Assert.ThrowsExceptionAsync<FileNotFoundOrExpiredException>(
+            () => _fileService.GetMetadataByTokenAsync("token-inconnu"));
+    }
+
+    [TestMethod]
+    public async Task GetMetadataByTokenAsync_WhenFileIsExpired_ThrowsFileNotFoundOrExpiredException()
+    {
+        // Arrange
+        var fileRecord = AddFileRecord(TestUserId, expiresAt: DateTime.UtcNow.AddDays(-1));
+
+        // Act & Assert : meme exception que "token inconnu" - ne jamais reveler
+        // qu'un lien a existe mais est juste expire (voir SECURITY.md).
+        await Assert.ThrowsExceptionAsync<FileNotFoundOrExpiredException>(
+            () => _fileService.GetMetadataByTokenAsync(fileRecord.DownloadToken));
+    }
+
+    [TestMethod]
+    public async Task GetMetadataByTokenAsync_WhenValid_ReturnsMetadataWithoutPasswordHash()
+    {
+        // Arrange
+        var fileRecord = AddFileRecord(TestUserId, "doc.pdf", passwordHash: "un-hash-bcrypt");
+
+        // Act
+        var result = await _fileService.GetMetadataByTokenAsync(fileRecord.DownloadToken);
+
+        // Assert
+        Assert.AreEqual("doc.pdf", result.Filename);
+        Assert.AreEqual("application/pdf", result.ContentType);
+        Assert.IsTrue(result.RequiresPassword);
+        // FileMetadataResponse n'a meme pas de propriete pour le hash : la seule
+        // fuite possible serait un champ ajoute par erreur plus tard - ce test
+        // documente l'intention de ne jamais l'exposer.
+    }
+
+    [TestMethod]
+    public async Task GetMetadataByTokenAsync_WhenNoPassword_RequiresPasswordIsFalse()
+    {
+        // Arrange
+        var fileRecord = AddFileRecord(TestUserId, "doc.pdf", passwordHash: null);
+
+        // Act
+        var result = await _fileService.GetMetadataByTokenAsync(fileRecord.DownloadToken);
+
+        // Assert
+        Assert.IsFalse(result.RequiresPassword);
+    }
+
+    // ---------- DownloadByTokenAsync (US02) ----------
+
+    [TestMethod]
+    public async Task DownloadByTokenAsync_WhenTokenDoesNotExist_ThrowsFileNotFoundOrExpiredException()
+    {
+        await Assert.ThrowsExceptionAsync<FileNotFoundOrExpiredException>(
+            () => _fileService.DownloadByTokenAsync("token-inconnu", password: null));
+    }
+
+    [TestMethod]
+    public async Task DownloadByTokenAsync_WhenFileIsExpired_ThrowsFileNotFoundOrExpiredException()
+    {
+        // Arrange
+        var fileRecord = AddFileRecord(TestUserId, expiresAt: DateTime.UtcNow.AddDays(-1), writePhysicalFile: true);
+
+        // Act & Assert
+        await Assert.ThrowsExceptionAsync<FileNotFoundOrExpiredException>(
+            () => _fileService.DownloadByTokenAsync(fileRecord.DownloadToken, password: null));
+    }
+
+    [TestMethod]
+    public async Task DownloadByTokenAsync_WhenPasswordRequiredButMissing_ThrowsInvalidFilePasswordException()
+    {
+        // Arrange
+        var fileRecord = AddFileRecord(TestUserId, passwordHash: BCrypt.Net.BCrypt.HashPassword("secret123"), writePhysicalFile: true);
+
+        // Act & Assert
+        await Assert.ThrowsExceptionAsync<InvalidFilePasswordException>(
+            () => _fileService.DownloadByTokenAsync(fileRecord.DownloadToken, password: null));
+    }
+
+    [TestMethod]
+    public async Task DownloadByTokenAsync_WhenPasswordIsWrong_ThrowsInvalidFilePasswordException()
+    {
+        // Arrange
+        var fileRecord = AddFileRecord(TestUserId, passwordHash: BCrypt.Net.BCrypt.HashPassword("secret123"), writePhysicalFile: true);
+
+        // Act & Assert
+        await Assert.ThrowsExceptionAsync<InvalidFilePasswordException>(
+            () => _fileService.DownloadByTokenAsync(fileRecord.DownloadToken, password: "mauvais-mot-de-passe"));
+    }
+
+    [TestMethod]
+    public async Task DownloadByTokenAsync_WhenPasswordIsCorrect_ReturnsFileContent()
+    {
+        // Arrange
+        var fileRecord = AddFileRecord(
+            TestUserId, "secret.pdf",
+            passwordHash: BCrypt.Net.BCrypt.HashPassword("secret123"),
+            writePhysicalFile: true,
+            content: "contenu-protege");
+
+        // Act
+        var (contentStream, contentType, filename) = await _fileService.DownloadByTokenAsync(fileRecord.DownloadToken, "secret123");
+
+        // Assert
+        Assert.AreEqual("application/pdf", contentType);
+        Assert.AreEqual("secret.pdf", filename);
+        using var reader = new StreamReader(contentStream);
+        Assert.AreEqual("contenu-protege", await reader.ReadToEndAsync());
+    }
+
+    [TestMethod]
+    public async Task DownloadByTokenAsync_WhenNoPasswordRequired_ReturnsFileContentWithoutPassword()
+    {
+        // Arrange
+        var fileRecord = AddFileRecord(TestUserId, "public.pdf", writePhysicalFile: true, content: "contenu-public");
+
+        // Act
+        var (contentStream, contentType, filename) = await _fileService.DownloadByTokenAsync(fileRecord.DownloadToken, password: null);
+
+        // Assert
+        Assert.AreEqual("public.pdf", filename);
+        using var reader = new StreamReader(contentStream);
+        Assert.AreEqual("contenu-public", await reader.ReadToEndAsync());
+    }
 }

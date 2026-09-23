@@ -62,3 +62,29 @@ Document vivant, enrichi au fil des étapes du projet (pas rédigé d'un bloc à
 **Décision** : le fichier est écrit sur le disque sous le nom `{downloadToken}{extension}` — le nom original du client (`OriginalFilename`) n'est stocké qu'en base, jamais réutilisé comme chemin de fichier réel.
 
 **Pourquoi** : un nom de fichier fourni par l'utilisateur est une donnée non fiable comme n'importe quelle autre entrée client — l'utiliser directement dans un `Path.Combine` exposerait à une traversée de chemin (ex. un nom contenant `../`) si jamais un contrôle en amont venait à manquer, et évite aussi les collisions entre deux uploads du même nom de fichier.
+
+### Le mot de passe optionnel d'un fichier est un contrôle d'accès, pas un chiffrement
+
+**Décision** : le mot de passe optionnel posé sur un fichier à l'upload est hashé avec BCrypt (`PasswordHash`, même mécanisme que le mot de passe de compte utilisateur) et vérifié via `BCrypt.Verify(...)` au moment du téléchargement (US02) — un échec de vérification bloque le téléchargement (exception dédiée → 401), mais **le contenu du fichier lui-même n'est jamais chiffré**. Il est stocké sur disque tel quel, en clair, dès l'upload.
+
+**Pourquoi ce n'est pas un oubli** : BCrypt est un hash à sens unique — il ne peut produire qu'une réponse vrai/faux à "ce mot de passe correspond-il ?", jamais servir de clé pour transformer des octets. Le mot de passe protège donc uniquement le **point d'entrée API** (`GET`/`POST /api/files/download/{token}`), exactement comme un login protège l'accès à un compte. Il ne protège pas la **confidentialité du fichier au repos** : quiconque a un accès direct au système de fichiers du serveur (ou à une sauvegarde non chiffrée) lit le fichier sans avoir besoin du mot de passe.
+
+**Pourquoi c'est un compromis acceptable pour ce MVP** : un vrai chiffrement du contenu (clé dérivée du mot de passe via une KDF, chiffrement au upload/déchiffrement au download) est une fonctionnalité sensiblement plus complexe, non demandée par le brief (qui exclut explicitement les "fonctionnalités avancées" du prototype). Le choix actuel reste cohérent avec le niveau de risque visé pour une démonstration à des investisseurs, tant qu'il est documenté comme tel plutôt que présenté comme une protection de confidentialité complète.
+
+**À reconsidérer si** : le produit évoluait vers un usage réel avec des données sensibles — le chiffrement du contenu deviendrait alors nécessaire, pas juste souhaitable.
+
+## Historique, liste et suppression de fichiers (US02/US05/US06)
+
+### La suppression vérifie l'appartenance côté serveur, jamais côté client
+
+**Décision** : `DELETE /api/files/{id}` vérifie que le fichier appartient bien à l'utilisateur authentifié (comparaison `UserId` du fichier vs claim `sub` du JWT) **avant** toute suppression. En cas de non-correspondance, renvoie **403** (jamais 404) et ne supprime rien.
+
+**Pourquoi documenté comme faille évitée, pas comme acquis d'emblée** : une première version écrite pendant le développement de cette US supprimait directement le fichier par son id, sans vérifier le propriétaire — repérée et corrigée en relecture avant merge. Si elle avait été livrée telle quelle, n'importe quel utilisateur authentifié aurait pu supprimer le fichier de n'importe qui d'autre simplement en devinant/énumérant des UUID de fichiers (IDOR — *Insecure Direct Object Reference*). Même principe déjà appliqué à l'upload (US01, voir plus haut) : ne jamais faire confiance à une identité que le serveur peut déjà vérifier lui-même — ici appliqué une seconde fois, sur une action destructive cette fois, donc avec un impact plus élevé si elle avait été manquée.
+
+**Pourquoi 403 et pas 404** : renvoyer 404 ("fichier introuvable") aurait masqué la vraie raison du refus, mais surtout aurait été trompeur — le fichier existe bel et bien, ce n'est pas une question d'existence mais de propriété. 403 reflète correctement la sémantique HTTP (requête comprise, refusée pour cause d'autorisation), cohérent avec le reste de l'API.
+
+### Le lien de téléchargement ne révèle jamais si un token a existé mais est expiré
+
+**Décision** : `GET`/`POST /api/files/download/{token}` renvoie exactement le même message générique ("lien invalide ou expiré") pour un token qui n'a jamais existé **et** pour un token expiré — jamais de distinction observable entre les deux cas.
+
+**Pourquoi** : même logique que l'énumération de comptes déjà évitée côté authentification — un message différent par cas permettrait à un tiers de déduire qu'un lien a réellement existé (donc qu'un fichier a été partagé à cette adresse), même sans jamais accéder à son contenu.
