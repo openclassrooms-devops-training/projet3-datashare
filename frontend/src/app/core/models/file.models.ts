@@ -24,3 +24,13 @@ export type FileErrorCode =
   | 'INVALID_EXPIRATION'
   | 'WEAK_FILE_PASSWORD'
   | 'UNSUPPORTED_FILE_TYPE';
+
+export interface FileMetadataResponse {
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  expiresAt: string;
+  requiresPassword: boolean;
+}
+
+export type FileStatusFilter = 'all' | 'active' | 'expired';

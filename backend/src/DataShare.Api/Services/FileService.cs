@@ -1,6 +1,7 @@
 using DataShare.Api.DTOs;
 using DataShare.Api.Exceptions;
 using DataShare.Api.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace DataShare.Api.Services;
 
@@ -125,15 +126,112 @@ public class FileService : IFileService
         }
     }
 
-    public async Task<FileResponse> GetAsync(Guid fileId)
+
+    public async Task DeleteAsync(Guid fileId, Guid userId)
     {
-        // Implementation for retrieving a file
-        throw new NotImplementedException();
+        // Retrieve the file record from the database
+        var fileRecord = await _dbContext.Files.FirstOrDefaultAsync(f => f.Id == fileId);
+        if (fileRecord == null)
+        {
+            throw new FileRecordNotFoundException();
+        }
+
+        // Verify that the file belongs to the user attempting to delete it
+        if (fileRecord.UserId != userId)
+        {
+            throw new FileAccessForbiddenException();
+        }
+
+        _dbContext.Files.Remove(fileRecord);
+        await _dbContext.SaveChangesAsync();
+
+        if (System.IO.File.Exists(fileRecord.StoragePath))
+        {
+            System.IO.File.Delete(fileRecord.StoragePath);
+        }
     }
 
-    public async Task DeleteAsync(Guid fileId)
+    public async Task<List<FileResponse>> GetFilesForUserAsync(Guid userId, string status)
     {
-        // Implementation for deleting a file
-        throw new NotImplementedException();
+        // Implementation for retrieving files for a user with a specific status
+        var query = _dbContext.Files.Include(f => f.Tags).AsQueryable();
+        query = query.Where(f => f.UserId == userId);
+        if (status == "active")
+        {
+            query = query.Where(f => f.ExpiresAt > DateTime.UtcNow);
+        }
+        else if (status == "expired")
+        {
+            query = query.Where(f => f.ExpiresAt <= DateTime.UtcNow);
+        }
+
+        var fileRecords = await query.ToListAsync();
+
+        return fileRecords.Select(fileRecord =>
+        {
+            var downloadUrl = $"{_baseUrl}/download/{fileRecord.DownloadToken}";
+            return new FileResponse
+            {
+                Id = fileRecord.Id,
+                Filename = fileRecord.OriginalFilename,
+                ContentType = fileRecord.ContentType,
+                SizeBytes = fileRecord.SizeBytes,
+                DownloadUrl = downloadUrl,
+                HasPassword = fileRecord.PasswordHash != null,
+                ExpiresAt = fileRecord.ExpiresAt,
+                CreatedAt = fileRecord.CreatedAt,
+                Status = fileRecord.ExpiresAt > DateTime.UtcNow ? "valid" : "expired",
+                Tags = fileRecord.Tags?.Select(t => t.Label).ToList() ?? new List<string>()
+            };
+        }).ToList();
+    }
+
+    public async Task<FileMetadataResponse> GetMetadataByTokenAsync(string token)
+    {
+        var fileRecord = await _dbContext.Files.FirstOrDefaultAsync(f => f.DownloadToken == token);
+        if (fileRecord == null || fileRecord.ExpiresAt <= DateTime.UtcNow)
+        {
+            throw new FileNotFoundOrExpiredException();
+        }
+
+        return new FileMetadataResponse
+        {
+            Filename = fileRecord.OriginalFilename,
+            ContentType = fileRecord.ContentType,
+            SizeBytes = fileRecord.SizeBytes,
+            ExpiresAt = fileRecord.ExpiresAt,
+            RequiresPassword = fileRecord.PasswordHash != null
+        };
+    }
+
+    public async Task<(Stream Content, string ContentType, string Filename)> DownloadByTokenAsync(string token, string? password)
+    {
+        //search for the file by token
+        var fileRecord = await _dbContext.Files.FirstOrDefaultAsync(f => f.DownloadToken == token);
+        if (fileRecord == null || fileRecord.ExpiresAt <= DateTime.UtcNow)
+        {
+            throw new FileNotFoundOrExpiredException();
+        }
+
+        //check password if required
+        if (fileRecord.PasswordHash != null)
+        {
+            if (string.IsNullOrEmpty(password) || !VerifyPassword(password, fileRecord.PasswordHash))
+            {
+                throw new InvalidFilePasswordException();
+            }
+        }
+
+        // Pas de using ici : le stream est renvoye a l'appelant (le controller, via File(...)),
+        // qui le lit puis le dispose une fois la reponse HTTP ecrite. Un using ici le fermerait
+        // avant meme que l'appelant ait pu le lire (ObjectDisposedException garantie).
+        var contentStream = System.IO.File.OpenRead(fileRecord.StoragePath);
+        return (contentStream, fileRecord.ContentType, fileRecord.OriginalFilename);
+    }
+
+    private bool VerifyPassword(string password, string passwordHash)
+    {
+        //verify the password against the stored hash
+        return BCrypt.Net.BCrypt.Verify(password, passwordHash);
     }
 }

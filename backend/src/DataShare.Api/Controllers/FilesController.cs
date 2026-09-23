@@ -51,4 +51,66 @@ public class FilesController : ControllerBase
             return BadRequest(new ErrorResponse { Message = ex.Message, Code = "UNSUPPORTED_FILE_TYPE" });
         }
     }
+
+    [Authorize]
+    [HttpGet]
+    public async Task<ActionResult<List<FileResponse>>> GetFiles([FromQuery] string status = "all")
+    {
+        var userId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+        var files = await _fileService.GetFilesForUserAsync(userId, status);
+        return Ok(files);
+    }
+
+    [Authorize]
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteFile(Guid id)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+
+        try
+        {
+            await _fileService.DeleteAsync(id, userId);
+            return NoContent();
+        }
+        catch (FileRecordNotFoundException ex)
+        {
+            return NotFound(new ErrorResponse { Message = ex.Message, Code = "FILE_NOT_FOUND" });
+        }
+        catch (FileAccessForbiddenException ex)
+        {
+            return StatusCode(403, new ErrorResponse { Message = ex.Message, Code = "FILE_ACCESS_FORBIDDEN" });
+        }
+    }
+
+    [HttpGet("download/{token}")]
+    public async Task<ActionResult<FileMetadataResponse>> GetFileMetadata(string token)
+    {
+        try
+        {
+            var metadata = await _fileService.GetMetadataByTokenAsync(token);
+            return Ok(metadata);
+        }
+        catch (FileNotFoundOrExpiredException ex)
+        {
+            return NotFound(new ErrorResponse { Message = ex.Message, Code = "FILE_NOT_FOUND_OR_EXPIRED" });
+        }
+    }
+
+    [HttpPost("download/{token}")]
+    public async Task<IActionResult> DownloadFile(string token, [FromBody] DownloadRequest? request)
+    {
+        try
+        {
+            var (content, contentType, filename) = await _fileService.DownloadByTokenAsync(token, request?.Password);
+            return File(content, contentType, filename);
+        }
+        catch (FileNotFoundOrExpiredException ex)
+        {
+            return NotFound(new ErrorResponse { Message = ex.Message, Code = "FILE_NOT_FOUND_OR_EXPIRED" });
+        }
+        catch (InvalidFilePasswordException ex)
+        {
+            return Unauthorized(new ErrorResponse { Message = ex.Message, Code = "INVALID_FILE_PASSWORD" });
+        }
+    }
 }
