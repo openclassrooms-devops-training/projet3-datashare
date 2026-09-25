@@ -137,7 +137,7 @@ jobs:
         with:
           name: frontend-coverage
           path: frontend/coverage/
-      - uses: SonarSource/sonarqube-scan-action@v5
+      - uses: SonarSource/sonarqube-scan-action@v8
         with:
           projectBaseDir: frontend
         env:
