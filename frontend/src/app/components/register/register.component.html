@@ -1,0 +1,61 @@
+<div class="page">
+  <div class="card">
+    <h1 class="title">Créer un compte</h1>
+
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <label for="email" class="field-label">Email</label>
+      <input
+        id="email"
+        formControlName="email"
+        type="email"
+        placeholder="Saisissez votre email..."
+        class="field-input"
+      />
+      @if (form.controls.email.invalid && form.controls.email.touched) {
+        <p class="field-error">Email invalide</p>
+      } @else {
+        <div class="field-spacer"></div>
+      }
+
+      <label for="password" class="field-label">Mot de passe</label>
+      <input
+        id="password"
+        formControlName="password"
+        type="password"
+        placeholder="Saisissez votre mot de passe..."
+        class="field-input"
+      />
+      @if (form.controls.password.errors?.['minlength'] && form.controls.password.touched) {
+        <p class="field-error">Le mot de passe doit faire au moins 8 caractères</p>
+      } @else if (form.controls.password.errors?.['pattern'] && form.controls.password.touched) {
+        <p class="field-error">Le mot de passe doit contenir un caractère spécial</p>
+      } @else {
+        <div class="field-spacer"></div>
+      }
+
+      <label for="passwordConfirmation" class="field-label">Vérification du mot de passe</label>
+      <input
+        id="passwordConfirmation"
+        formControlName="passwordConfirmation"
+        type="password"
+        placeholder="Saisissez le à nouveau"
+        class="field-input mb-1"
+      />
+      @if (form.errors?.['passwordsMismatch'] && form.controls.passwordConfirmation.touched) {
+        <p class="field-error">Les mots de passe ne correspondent pas</p>
+      } @else {
+        <div class="field-spacer"></div>
+      }
+
+      @if (errorMessage) {
+        <p class="field-error">{{ errorMessage }}</p>
+      }
+
+      <a routerLink="/login" class="link-text">J'ai déjà un compte</a>
+
+      <button type="submit" [disabled]="form.invalid" class="btn-primary">
+        Créer mon compte
+      </button>
+    </form>
+  </div>
+</div>

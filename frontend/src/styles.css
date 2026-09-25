@@ -1,0 +1,209 @@
+@import "tailwindcss";
+
+/* You can add global styles to this file, and also import other style files */
+
+/* Socle commun de l'appli : chaque page en herite automatiquement, sans rien declarer */
+
+body {
+  @apply min-h-screen bg-gradient-to-br from-orange-200 via-orange-300 to-red-400;
+}
+
+/* Classes partagees entre les pages d'authentification (login, register...) */
+
+/* Sans ca, l'element hote du composant routé (ex. <app-upload>) reste en display
+   par defaut et n'est jamais etire par le flex du parent (.app-shell) - .page a
+   l'interieur n'a alors aucun espace vertical a remplir pour se centrer. */
+app-login, app-register, app-upload, app-download, app-mon-espace {
+  display: contents;
+}
+
+.page {
+  @apply flex-1 flex items-center justify-center p-4;
+}
+
+.card {
+  @apply bg-white rounded-2xl shadow-lg p-8 w-full max-w-md;
+}
+
+.title {
+  @apply text-2xl font-bold text-center mb-6;
+}
+
+.field-label {
+  @apply block text-sm mb-1;
+}
+
+.field-input {
+  @apply border border-gray-200 rounded-lg px-4 py-2 w-full mb-1 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400;
+}
+
+.field-error {
+  @apply text-red-500 text-sm mb-3;
+}
+
+.field-spacer {
+  @apply mb-4;
+}
+
+.link-text {
+  @apply block text-center text-orange-600 text-sm mb-4;
+}
+
+.btn-primary {
+  @apply bg-orange-50 border border-orange-300 text-orange-600 rounded-lg w-full py-3 font-medium hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+/* Classes partagees pour le header, present sur toutes les pages */
+
+.app-shell {
+  @apply min-h-screen flex flex-col;
+}
+
+.header {
+  @apply flex items-center justify-between p-4;
+}
+
+.header-logo {
+  @apply text-2xl font-extrabold text-gray-900 no-underline;
+}
+
+.header-cta {
+  @apply bg-gray-900 text-white rounded-lg px-4 py-2 text-sm font-medium no-underline hover:bg-gray-800;
+}
+
+/* Classes partagees pour l'ecran d'upload */
+
+.btn-secondary {
+  @apply bg-white border border-gray-200 text-gray-600 rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-50;
+}
+
+.file-row {
+  /* flex-wrap : sur mon-espace, une ligne a bien plus d'elements que sur l'upload
+     (icone, cadenas, 2 boutons) - sans wrap, ils se disputent la largeur et
+     ecrasent le nom du fichier jusqu'a le rendre invisible sur mobile. */
+  @apply flex flex-wrap items-center gap-3 mb-2;
+}
+
+.file-row-info {
+  /* min-w-32 (pas min-w-0) : garantit un minimum de place pour le nom/la date
+     avant que les boutons ne soient forces a passer a la ligne suivante. */
+  @apply flex-1 min-w-32;
+}
+
+/* Regroupe Supprimer + Acceder en un seul enfant flex de .file-row : flex-wrap
+   ne replie que des elements entiers, jamais un sous-ensemble - sans ce
+   conteneur, les 2 boutons se repliaient independamment l'un de l'autre selon
+   la largeur dispo (parfois ensemble, parfois un seul), incoherent d'une ligne
+   a l'autre selon la presence ou non du cadenas. */
+.file-row-actions {
+  @apply flex items-center gap-3 shrink-0;
+}
+
+.file-row-info p {
+  @apply truncate;
+}
+
+/* Zone de depot (drop zone) : cercle sombre + halo qui pulse en continu, s'intensifie au survol/glissement */
+
+.dropzone-wrapper {
+  @apply relative flex items-center justify-center mx-auto mb-6 cursor-pointer;
+  width: 140px;
+  height: 140px;
+}
+
+.dropzone-halo {
+  @apply absolute inset-0 rounded-full bg-gray-900/10 transition-colors;
+  animation: dropzone-pulse 2.5s ease-in-out infinite;
+}
+
+.dropzone-wrapper-active .dropzone-halo {
+  @apply bg-orange-400/30;
+  animation: dropzone-pulse-active 1s ease-in-out infinite;
+}
+
+.dropzone-circle {
+  @apply relative z-10 flex items-center justify-center w-20 h-20 rounded-full bg-gray-900 text-white transition-colors;
+}
+
+.dropzone-wrapper-active .dropzone-circle {
+  @apply bg-orange-600;
+}
+
+@keyframes dropzone-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 0.85; }
+}
+
+@keyframes dropzone-pulse-active {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.18); opacity: 1; }
+}
+
+/* Classes partagees pour l'ecran "Mon espace" (sidebar + liste de fichiers) */
+/* Cette page n'affiche pas le header global (voir app.component.ts, hideHeader) -
+   elle porte donc son propre bandeau "DataShare", integre a la sidebar. */
+
+.mon-espace-layout {
+  @apply min-h-screen flex flex-col md:flex-row;
+}
+
+.sidebar {
+  @apply flex flex-col gap-4 p-6 md:w-64 shrink-0 text-white bg-gradient-to-br from-orange-300 to-red-400;
+}
+
+.sidebar-logo {
+  @apply text-2xl font-extrabold;
+}
+
+.sidebar-nav {
+  @apply flex-1 flex flex-col gap-2;
+}
+
+.sidebar-link {
+  @apply bg-orange-50 text-orange-800 rounded-lg px-4 py-2 no-underline font-medium hover:bg-orange-100;
+}
+
+.sidebar-copyright {
+  @apply text-xs text-white/80;
+}
+
+.mon-espace-main {
+  @apply flex-1 p-6 bg-white;
+}
+
+.mon-espace-topbar {
+  @apply flex items-center justify-end gap-2 mb-4;
+}
+
+/* Chip unique englobant les 3 onglets, pas 3 boutons bordes independants */
+.tabs {
+  @apply inline-flex bg-white border border-gray-200 rounded-full p-1 mb-4;
+}
+
+.tab {
+  @apply rounded-full border-0 bg-transparent px-4 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50;
+}
+
+.tab-active {
+  @apply bg-orange-400 text-white hover:bg-orange-400;
+}
+
+.file-card {
+  @apply max-w-none mb-3 p-4;
+}
+
+/* Boutons "Supprimer" et "Accéder" : meme style pour les deux (uniforme, comme
+   sur la maquette - orange, bordure, icone), classe dediee plutot que reutiliser
+   .btn-primary (pensee pour un CTA pleine largeur) - w-full y est deja applique
+   par @apply, et un simple w-auto sur l'element ne le surcharge pas de facon
+   fiable (meme specificite, ordre de generation Tailwind) - d'ou le bouton
+   "Accéder" qui s'etirait et recouvrait le reste de la ligne. */
+.btn-file-action {
+  @apply inline-flex items-center gap-1 bg-white border border-orange-300 text-orange-600 rounded-lg px-4 py-2 text-sm font-medium no-underline shrink-0 hover:bg-orange-50;
+}
+
+/* Bouton "Deconnexion" : lien texte + icone en orange, sans cadre - different
+   des autres boutons de la topbar (voir maquette). */
+.btn-logout-link {
+  @apply inline-flex items-center gap-1.5 bg-transparent border-0 text-orange-600 text-sm font-medium hover:text-orange-700;
+}

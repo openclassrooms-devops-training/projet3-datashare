@@ -1,0 +1,38 @@
+<div class="page">
+  <div class="card">
+    <h1 class="title">Connexion</h1>
+
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <label for="email" class="field-label">Email</label>
+      <input
+        id="email"
+        formControlName="email"
+        type="email"
+        placeholder="Saisissez votre email..."
+        class="field-input"
+      />
+      @if (form.controls.email.invalid && form.controls.email.touched) {
+        <p class="field-error">Email invalide</p>
+      } @else {
+        <div class="field-spacer"></div>
+      }
+
+      <label for="password" class="field-label">Mot de passe</label>
+      <input
+        id="password"
+        formControlName="password"
+        type="password"
+        placeholder="Saisissez votre mot de passe..."
+        class="field-input mb-6"
+      />
+      @if (errorMessage) {
+        <p class="field-error">{{ errorMessage }}</p>
+      }
+      <a routerLink="/register" class="link-text">Créer un compte</a>
+
+      <button type="submit" [disabled]="form.invalid" class="btn-primary">
+        Connexion
+      </button>
+    </form>
+  </div>
+</div>

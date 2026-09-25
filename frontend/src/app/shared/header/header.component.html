@@ -1,0 +1,9 @@
+<header class="header">
+  <a routerLink="/" class="header-logo">DataShare</a>
+
+  @if (isAuthenticated) {
+    <a routerLink="/mon-espace" class="header-cta">Mon espace</a>
+  } @else {
+    <a routerLink="/login" class="header-cta">Se connecter</a>
+  }
+</header>

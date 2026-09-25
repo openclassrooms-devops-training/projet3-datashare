@@ -1,0 +1,233 @@
+name: Publier les rapports de couverture
+
+# Publie tous les rapports HTML issus des tests (couverture + resultats detailles,
+# backend et frontend, y compris e2e) sur GitHub Pages, a chaque merge sur main
+# (etat le plus stable/presente), ou a la demande.
+# Independant de ci-backend.yml/ci-frontend.yml : execution volontairement
+# autonome plutot que de recuperer leurs artefacts inter-workflow (plus simple
+# a lire/maintenir, cout negligeable vu la faible frequence - seulement sur main).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  backend-reports:
+    name: Rapports backend (couverture + résultats)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: datashare
+          POSTGRES_USER: datashare
+          POSTGRES_PASSWORD: datashare_dev_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Create integration test database
+        run: PGPASSWORD=datashare_dev_only psql -h localhost -U datashare -d datashare -c "CREATE DATABASE datashare_integration_test;"
+      - working-directory: backend
+        run: dotnet restore
+      # Unitaires + integration dans la meme collecte de couverture (fichiers XML
+      # dans des sous-dossiers uniques, donc pas de conflit) - necessaire pour une
+      # couverture reelle (les tests unitaires seuls ne couvrent pas Program.cs/le
+      # pipeline HTTP reel). Le logger HTML des RESULTATS, lui, n'a pas de sous-dossier
+      # unique par projet : deux invocations groupees ecraseraient le meme
+      # report.html - execution separee par projet, avec un nom de fichier distinct.
+      - working-directory: backend
+        run: >
+          dotnet test tests/DataShare.UnitTests --no-restore
+          --collect:"XPlat Code Coverage"
+          --logger "html;LogFileName=unit-tests.html"
+          --results-directory ./coverage
+      - working-directory: backend
+        run: >
+          dotnet test tests/DataShare.IntegrationTests --no-restore
+          --collect:"XPlat Code Coverage"
+          --logger "html;LogFileName=integration-tests.html"
+          --results-directory ./coverage
+      - name: Générer le rapport de couverture HTML (ReportGenerator)
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          reportgenerator \
+            "-reports:backend/coverage/**/coverage.cobertura.xml" \
+            "-targetdir:pages/backend/coverage" \
+            -reporttypes:Html
+      - name: Rassembler les rapports de résultats de tests
+        run: |
+          mkdir -p pages/backend/test-results
+          find backend/coverage -name "unit-tests.html" -exec cp {} pages/backend/test-results/unit-tests.html \;
+          find backend/coverage -name "integration-tests.html" -exec cp {} pages/backend/test-results/integration-tests.html \;
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pages-backend
+          path: pages/backend/
+
+  frontend-reports:
+    name: Rapports frontend (couverture + résultats)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      # jest.config.js genere les deux rapports en une seule commande : la
+      # couverture (coverageReporters) dans coverage/, les resultats detailles
+      # pass/fail (jest-html-reporters, configure comme "reporters") dans test-results/.
+      - working-directory: frontend
+        run: npm test -- --coverage --watchAll=false
+      - name: Rassembler les rapports
+        run: |
+          mkdir -p pages/frontend
+          cp -r frontend/coverage pages/frontend/coverage
+          cp -r frontend/test-results pages/frontend/test-results
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pages-frontend
+          path: pages/frontend/
+
+  e2e-report:
+    name: Rapport e2e (Cypress)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: datashare
+          POSTGRES_USER: datashare
+          POSTGRES_PASSWORD: datashare_dev_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ConnectionStrings__DataShare: "Host=localhost;Port=5432;Database=datashare;Username=datashare;Password=datashare_dev_only"
+      Jwt__Key: "ci-e2e-signing-key-at-least-32-characters-long"
+      fileStorage__path: "/tmp/datashare-e2e-storage"
+      App__BaseUrl: "http://localhost:4200"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Apply database migrations
+        working-directory: backend
+        run: |
+          dotnet tool install --global dotnet-ef --version 8.*
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          dotnet ef database update --project src/DataShare.Api
+      - name: Start backend
+        working-directory: backend
+        run: |
+          dotnet run --project src/DataShare.Api --urls http://localhost:5074 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5074/health > /dev/null; then
+              echo "Backend pret"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Le backend n'a pas demarre a temps"
+          exit 1
+      # cypress-mochawesome-reporter (voir cypress.config.ts) genere un rapport HTML
+      # par scenario (statut, duree, captures d'ecran en cas d'echec).
+      - working-directory: frontend
+        run: npm run e2e:ci
+      - name: Rassembler le rapport
+        run: |
+          mkdir -p pages/e2e
+          cp -r frontend/cypress/test-results/* pages/e2e/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pages-e2e
+          path: pages/e2e/
+
+  deploy:
+    name: Déployer sur GitHub Pages
+    runs-on: ubuntu-latest
+    needs: [backend-reports, frontend-reports, e2e-report]
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pages-backend
+          path: site/backend
+      - uses: actions/download-artifact@v4
+        with:
+          name: pages-frontend
+          path: site/frontend
+      - uses: actions/download-artifact@v4
+        with:
+          name: pages-e2e
+          path: site/e2e
+      - name: Page d'accueil
+        run: |
+          cat > site/index.html << 'HTML'
+          <!DOCTYPE html>
+          <html lang="fr">
+          <head><meta charset="utf-8"><title>DataShare — Rapports de tests</title></head>
+          <body style="font-family: system-ui, sans-serif; max-width: 640px; margin: 60px auto; line-height: 1.6;">
+            <h1>DataShare — Rapports de tests</h1>
+            <p>Générés automatiquement à chaque merge sur <code>main</code> (voir <code>.github/workflows/coverage-pages.yml</code>).</p>
+            <h2>Backend (.NET — MSTest)</h2>
+            <ul>
+              <li><a href="backend/coverage/index.html">Couverture de code (unitaire + intégration fusionnées)</a></li>
+              <li><a href="backend/test-results/unit-tests.html">Résultats détaillés — tests unitaires</a></li>
+              <li><a href="backend/test-results/integration-tests.html">Résultats détaillés — tests d'intégration</a></li>
+            </ul>
+            <h2>Frontend (Angular — Jest)</h2>
+            <ul>
+              <li><a href="frontend/coverage/index.html">Couverture de code</a></li>
+              <li><a href="frontend/test-results/report.html">Résultats détaillés (pass/fail par test)</a></li>
+            </ul>
+            <h2>End-to-end (Cypress)</h2>
+            <ul>
+              <li><a href="e2e/index.html">Résultats des scénarios (avec captures d'écran)</a></li>
+            </ul>
+          </body>
+          </html>
+          HTML
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

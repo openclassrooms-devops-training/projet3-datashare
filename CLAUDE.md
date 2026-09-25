@@ -49,10 +49,10 @@ backend/
 ├── src/
 │   ├── Controllers/     # Endpoints REST (DTOs en entrée/sortie uniquement)
 │   ├── Services/        # Logique métier (interfaces + implémentations)
-│   ├── Repositories/    # Accès aux données (EF Core)
 │   ├── Models/          # Entités EF Core
 │   ├── DTOs/            # Objets de transfert (requêtes/réponses API)
 │   ├── Middleware/       # Gestion d'erreurs, auth JWT
+│   ├── AppDbContext.cs
 │   └── Program.cs
 └── tests/
     ├── UnitTests/         # MSTest
@@ -60,6 +60,7 @@ backend/
 ```
 
 - Pas de logique métier dans les contrôleurs — ils délèguent aux services.
+- Pas de couche Repositories séparée — les services injectent `AppDbContext` directement (choix assumé : pour la taille de ce projet, une couche repository par-dessus EF Core n'apporte pas grand-chose ; `DbContext`/`DbSet<T>` fait déjà office de repository + unit-of-work). Testabilité assurée via le provider EF Core InMemory plutôt que par mock de repository.
 - Injection de dépendances via le conteneur ASP.NET Core natif.
 - Requêtes paramétrées uniquement (EF Core LINQ), jamais de concaténation SQL.
 - Nullable reference types activés (`<Nullable>enable</Nullable>`).
@@ -69,21 +70,23 @@ backend/
 ```
 frontend/src/
 ├── app/
-│   ├── core/           # Services singleton, guards, intercepteurs (JWT, refresh)
-│   ├── shared/         # Composants réutilisables, pipes, directives
-│   ├── features/       # Modules fonctionnels (lazy-loaded) : auth, upload, historique...
-│   │   └── feature-x/
-│   │       ├── components/
-│   │       ├── services/
-│   │       └── models/
+│   ├── core/           # Transversal, organise par type technique (pas par feature)
+│   │   ├── guards/
+│   │   ├── interceptors/
+│   │   ├── models/
+│   │   └── services/
+│   ├── components/      # Un dossier par ecran
+│   │   ├── login/
+│   │   └── register/
 │   └── app.component.ts
 ├── assets/
 └── environments/
 ```
 
+- Pas de couche `features/`/`shared/` intermédiaire — trop pour la taille de ce projet (choix assumé : structure plate, `components/<ecran>/`, plus lisible/explicite pour ce périmètre). `shared/` pourra être ajouté plus tard, seulement le jour où un composant réutilisable entre plusieurs écrans apparaît réellement — pas par anticipation.
 - Smart/Dumb components : les Smart gèrent la donnée, les Dumb sont purement présentationnels (`@Input`/`@Output`).
 - `OnPush` change detection partout.
-- Routes lazy-loadées.
+- Routes lazy-loadées (`loadComponent`).
 - Standalone components (pas de NgModules).
 
 ## Conventions Git
@@ -97,7 +100,9 @@ Les branches `main` et `develop` sont **protégées**. **Aucun push direct**, m�
 
 ### Fil rouge : les étapes de la mission
 
-Le projet suit les 6 étapes du brief OpenClassrooms (voir `.mafal\projet3-datashare\entrants\mission\`). Une branche/un groupe de commits par étape.
+Le projet suit les 6 étapes du brief OpenClassrooms (voir `.mafal\projet3-datashare\entrants\mission\`). **Une branche = une PR = une étape**, dans cet ordre, sans anticiper sur la suivante — le mentor doit pouvoir lire l'historique des PR comme la progression naturelle des étapes du brief.
+
+Avant de commencer le travail d'une étape, relire son fichier dans `entrants/mission/` et comparer précisément son "Résultat attendu" à ce qu'on s'apprête à faire. Piège déjà rencontré sur ce projet : en démarrant l'Étape 2 ("initialisation des applications"), il a été tentant d'ajouter tout de suite JWT, BCrypt et les entités EF Core (`User`, etc.) — mais ça appartient explicitement à l'Étape 3 ("Implémentez votre première User Story", résultat attendu = "un système d'authentification fonctionnel"). Ne pas construire par anticipation ce qu'une étape ultérieure demande explicitement, même si c'est tentant ou "logique" techniquement — ça brouille la lisibilité de la PR pour le mentor et ça duplique le travail entre deux étapes.
 
 ### Workflow
 
@@ -142,6 +147,8 @@ Répartis en 4 fichiers à la racine (exigence de la spec OC) : `TESTING.md`, `S
 ## Utilisation de l'IA dans le développement
 
 Contrainte du brief : l'IA générative ne doit être utilisée que pour développer **une seule User Story** du projet ; le reste est codé manuellement. Pour cette US : tâches assignées explicitement, code relu, commits séparés (ex. `feat(ai): ...` puis `fix: ... (revue humaine)`), et une section dédiée dans la doc technique expliquant l'usage fait de l'IA. Voir `.mafal\projet3-datashare\entrants\ia-et-developpement.md` et `mission\04-etape-4-fonctionnalites.md`.
+
+**Conséquence concrète pour Claude Code sur ce repo** : tant que l'US "IA" n'est pas explicitement désignée par l'utilisateur (normalement à l'Étape 4, parmi "les autres fonctionnalités"), **ne pas écrire de code métier implémentant une User Story** (entités, services, contrôleurs, composants Angular liés à une US) — scaffolding/infra/CI/docs/diagrammes restent hors de cette contrainte, ce n'est pas du code de User Story. Pour toute US hors du quota IA, produire à la place un guide d'implémentation (méthode, ordre suggéré, pièges à éviter, sans code) dans `.mafal\projet3-datashare\consignes\etape<N>-<sujet>.md`, et laisser l'utilisateur coder à la main. Voir `.mafal\projet3-datashare\consignes\etape3-authentification.md` pour le format de référence.
 
 ## Sécurité
 
