@@ -79,7 +79,7 @@ jobs:
           mkdir -p pages/backend/test-results
           find backend/coverage -name "unit-tests.html" -exec cp {} pages/backend/test-results/unit-tests.html \;
           find backend/coverage -name "integration-tests.html" -exec cp {} pages/backend/test-results/integration-tests.html \;
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pages-backend
           path: pages/backend/
@@ -106,7 +106,7 @@ jobs:
           mkdir -p pages/frontend
           cp -r frontend/coverage pages/frontend/coverage
           cp -r frontend/test-results pages/frontend/test-results
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pages-frontend
           path: pages/frontend/
@@ -172,7 +172,7 @@ jobs:
         run: |
           mkdir -p pages/e2e
           cp -r frontend/cypress/test-results/* pages/e2e/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: pages-e2e

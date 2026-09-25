@@ -53,7 +53,7 @@ jobs:
         run: PGPASSWORD=datashare_dev_only psql -h localhost -U datashare -d datashare -c "CREATE DATABASE datashare_integration_test;"
       - run: dotnet restore
       - run: dotnet test --no-restore --collect:"XPlat Code Coverage" --results-directory ./coverage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: backend-coverage
           path: backend/coverage/
@@ -96,7 +96,7 @@ jobs:
         with:
           dotnet-version: "8.0.x"
       - run: dotnet publish --configuration Release --output ./publish
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: backend-publish
           path: backend/publish/
