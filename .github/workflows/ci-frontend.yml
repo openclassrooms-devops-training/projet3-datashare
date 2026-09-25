@@ -87,7 +87,7 @@ jobs:
           fi
       # Les scenarios Cypress appellent une vraie API (pas de mock) : il faut demarrer
       # le vrai backend .NET contre la vraie base Postgres du job, migrations comprises.
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         if: steps.e2e-check.outputs.has_specs == 'true'
         with:
           dotnet-version: "8.0.x"
