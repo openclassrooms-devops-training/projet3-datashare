@@ -30,3 +30,21 @@ Pas bloquant pour l'Étape 3 (l'authentification fonctionne très bien sans ce n
 **Autre écart lié, note pour memoire** : la maquette mobile a aussi un agencement distinct (menu hamburger, onglets en pilule type "Switch Component", bouton "..." par fichier au lieu de Supprimer/Accéder explicites) qu'on n'a pas reproduit — l'écran "Mon espace" actuel est responsive (la sidebar passe en colonne sur petit écran) mais pas une refonte mobile dédiée. Idem : pas demandé par une US, périmètre volontairement limité pour ce prototype.
 
 **À faire si le produit évolue** : ajouter `FirstName`/`LastName` (et une URL de photo) à l'entité `User`, un écran de complétion de profil, et une variante mobile dédiée de l'interface plutôt qu'un simple responsive.
+
+## Dépendances
+
+### Mise à jour automatisée — Dependabot
+
+**Mécanisme** : `.github/dependabot.yml` configure Dependabot (natif GitHub) pour surveiller **3 écosystèmes** séparément et ouvrir une Pull Request automatiquement dès qu'une nouvelle version est disponible :
+- `github-actions` (racine du repo) : les versions `@vX` utilisées dans les workflows CI (`.github/workflows/*.yml`)
+- `nuget` (`/backend`) : les packages référencés dans les `.csproj`
+- `npm` (`/frontend`) : les dépendances de `package.json`
+
+**Fréquence** : vérification **hebdomadaire**, indépendamment pour chacun des trois écosystèmes.
+
+**Procédure de traitement des PR ouvertes** : Dependabot ouvre la PR mais ne merge jamais rien tout seul — chaque PR passe par la **même CI** que n'importe quelle PR humaine (lint, build, tests unitaires/intégration/E2E) avant merge. Une mise à jour qui casse quelque chose se voit donc en CI, pas en production. En pratique :
+- Un bump **mineur/patch** avec CI verte est généralement sûr à merger directement.
+- Un bump **majeur** (ex. `v4` → `v6`) mérite une lecture rapide du changelog avant merge — un changement de version majeure peut casser une API utilisée, même si la CI de ce projet ne le détecte pas forcément (dépend de la couverture de test réelle sur la partie concernée).
+- Preuve que le mécanisme tourne réellement : les PR #1 à #5 du repo (`chore(deps): bump actions/...`) ont été ouvertes automatiquement par Dependabot, jamais écrites à la main.
+
+**Risque non couvert par ce fichier** : Dependabot gère séparément les **alertes de sécurité** (vulnérabilité connue/CVE sur une dépendance déjà utilisée) — ces PR-là peuvent arriver en dehors du planning hebdomadaire, dès qu'une faille est publiée, indépendamment de `dependabot.yml`. À surveiller via l'onglet "Security" du repo GitHub.
