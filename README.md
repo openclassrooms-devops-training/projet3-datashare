@@ -4,7 +4,7 @@
 
 ## Contexte
 
-Projet pédagogique OpenClassrooms (path 2461, projet 4089) : concevoir et développer, en tant que référent technique senior fictif chez « DataShare », le prototype d'une plateforme de partage de fichiers façon WeTransfer, avec pilotage de l'architecture, implémentation supervisée (dont une User Story assignée à un copilote IA), tests, sécurité, performance et documentation.
+Projet pédagogique OpenClassrooms (path 2461, projet 4089) : concevoir et développer, en tant que référent technique senior fictif chez « DataShare », le prototype d'une plateforme de partage de fichiers façon WeTransfer, avec pilotage de l'architecture, implémentation supervisée (dont un usage actif d'un copilote IA, relu et documenté — voir `docs/documentation-technique.md`, section 8), tests, sécurité, performance et documentation.
 
 Le brief complet, les spécifications, les maquettes Figma et le suivi de la mission sont hors de ce repo (matériel de formation non officialisé) : `C:\workspace\.mafal\projet3-datashare\entrants\`.
 
